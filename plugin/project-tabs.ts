@@ -1,6 +1,6 @@
 let nextGroup = 0;
 
-export function mountProjectTabs(navigation: HTMLElement, panels: HTMLElement[], labels: string[], changed: () => void): (index: number) => void {
+export function mountProjectTabs(navigation: HTMLElement, panels: HTMLElement[], labels: string[], changed: () => void, makeEl: typeof createEl = createEl): (index: number) => void {
 	const group = ++nextGroup;
 	const buttons: HTMLButtonElement[] = [];
 	navigation.setAttribute("role", "tablist");
@@ -13,7 +13,7 @@ export function mountProjectTabs(navigation: HTMLElement, panels: HTMLElement[],
 		}
 	};
 	for (const [index, label] of labels.entries()) {
-		const button = navigation.ownerDocument.createElement("button"); button.type = "button"; button.textContent = label;
+		const button = makeEl("button"); button.type = "button"; button.textContent = label;
 		button.id = "bookbinder-tab-" + group + "-" + index;
 		button.setAttribute("role", "tab");
 		panels[index].id = "bookbinder-panel-" + group + "-" + index;

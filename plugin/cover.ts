@@ -6,8 +6,8 @@ export interface CoverOptions {
 	background?: string;
 }
 
-export async function renderCover(options: CoverOptions): Promise<Uint8Array> {
-	const canvas = document.createElement("canvas");
+export async function renderCover(options: CoverOptions, makeEl: typeof createEl = createEl): Promise<Uint8Array> {
+	const canvas = makeEl("canvas");
 	canvas.width = 1600;
 	canvas.height = 2400;
 	const context = canvas.getContext("2d");

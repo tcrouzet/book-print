@@ -4,6 +4,8 @@
 	overflow-wrap: anywhere;
 }
 
+.bookbinder-paths-row { display: block; }
+
 .bookbinder-settings .bookbinder-paths {
 	margin-block: var(--size-4-4);
 }

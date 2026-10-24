@@ -3,6 +3,8 @@ import { bookStyles, contextRules, type BookStyle } from "./book-styles";
 import { mountProjectTabs } from "./project-tabs";
 
 interface StyleEditorOptions {
+	sanitizeHTMLToDom: (html: string) => DocumentFragment;
+	createEl?: typeof createEl;
 	format?: "epub" | "pdf" | "docx";
 	setIcon?: (element: HTMLElement, name: string) => void;
 	rules?: boolean;
@@ -10,6 +12,7 @@ interface StyleEditorOptions {
 
 export class StyleEditor {
 	private frame: HTMLIFrameElement;
+	private makeEl: typeof createEl;
 	private toolbar: HTMLElement;
 	private selected = "p";
 	private section = 0;
@@ -22,7 +25,8 @@ export class StyleEditor {
 	private pageContainer?: HTMLElement;
 	readonly ready: Promise<void>;
 
-	constructor(container: HTMLElement, readonly presentation: Presentation, private css: string, private changed: () => void, private requestClose?: () => void, private options: StyleEditorOptions = {}) {
+	constructor(container: HTMLElement, readonly presentation: Presentation, private css: string, private changed: () => void, private requestClose: (() => void) | undefined, private options: StyleEditorOptions) {
+		this.makeEl = options.createEl ?? createEl;
 		presentation.page ??= {};
 		presentation.styles ??= {};
 		presentation.rules ??= {};
@@ -32,20 +36,19 @@ export class StyleEditor {
 			for (const side of ["top", "bottom", "left", "right"]) presentation.page["margin-" + side] ??= legacyMargin;
 			delete presentation.style["page-margin"];
 		}
-		const document = container.ownerDocument;
-		this.toolbar = document.createElement("div");
+		this.toolbar = this.makeEl("div");
 		this.toolbar.className = "bookbinder-toolbar";
 		this.toolbar.setAttribute("role", "group");
 		this.toolbar.setAttribute("aria-label", "Mise en forme des styles du livre");
 		container.append(this.toolbar);
-		const description = document.createElement("p");
+		const description = this.makeEl("p");
 		description.className = "bookbinder-style-help";
-		description.textContent = "Auto reprend le modèle. Effacez une valeur pour revenir en Auto.";
+		description.textContent = "Auto reprend le modèle. Effacez une valeur pour rétablir ses réglages.";
 		container.append(description);
-		const previewHeading = document.createElement("div"); previewHeading.className = "bookbinder-preview-heading";
-		const previewTitle = document.createElement("span"); previewTitle.textContent = "Aperçu"; previewHeading.append(previewTitle);
-		this.previewLabel = document.createElement("span"); previewHeading.append(this.previewLabel); container.append(previewHeading);
-		this.frame = document.createElement("iframe");
+		const previewHeading = this.makeEl("div"); previewHeading.className = "bookbinder-preview-heading";
+		const previewTitle = this.makeEl("span"); previewTitle.textContent = "Aperçu"; previewHeading.append(previewTitle);
+		this.previewLabel = this.makeEl("span"); previewHeading.append(this.previewLabel); container.append(previewHeading);
+		this.frame = this.makeEl("iframe");
 		this.frame.className = "bookbinder-preview";
 		this.frame.title = "Aperçu de la présentation du livre";
 		this.frame.setAttribute("sandbox", "allow-same-origin");
@@ -55,11 +58,11 @@ export class StyleEditor {
 				if (this.disposed) { resolve(); return; }
 				const preview = this.frame.contentDocument!;
 				preview.addEventListener("keydown", event => { if (event.key === "Escape") { event.preventDefault(); this.requestClose?.(); } });
-				const base = preview.createElement("style");
+				const base = this.makeEl("style");
 				this.base = base;
 				this.updateBase();
 				preview.head.append(base);
-				this.rules = preview.createElement("style");
+				this.rules = this.makeEl("style");
 				preview.head.append(this.rules);
 				for (const [tag, text] of [
 					["h1", "Une nouvelle histoire"], ["h2", "Au commencement"],
@@ -67,8 +70,8 @@ export class StyleEditor {
 					["p", "Chaque page possède son rythme. Les titres, les blancs et la typographie accompagnent le texte et donnent envie de poursuivre la lecture."],
 					["h3", "Un matin de printemps"], ["p", "Elle ouvrit la fenêtre. La ville s’éveillait lentement, avec ce calme particulier qui précède les grandes journées."],
 					["h4", "Exergue"], ["h5", "Une voix lointaine"], ["h6", "Le dernier mot"],
-				]) {
-					const element = preview.createElement(tag);
+				] as const) {
+					const element = this.makeEl(tag);
 					element.textContent = text;
 					if (!this.options.rules) {
 					element.dataset.bookStyle = tag;
@@ -82,7 +85,7 @@ export class StyleEditor {
 					preview.body.append(element);
 				}
 				if (this.relativeUnits) for (const style of this.catalog.filter(style => style.sample)) {
-					const wrapper = preview.createElement("div"); wrapper.innerHTML = style.sample!;
+					const wrapper = this.options.sanitizeHTMLToDom(style.sample!);
 					const element = wrapper.querySelector<HTMLElement>(style.target ?? style.selector)!;
 					element.dataset.bookStyle = style.selector;
 					element.tabIndex = 0; element.setAttribute("role", "button"); element.setAttribute("aria-label", "Modifier le style " + style.label);
@@ -152,9 +155,9 @@ export class StyleEditor {
 		for (const [side, titleText] of [["top", "Marge haute de page"], ["bottom", "Marge basse de page"], ["left", "Marge gauche de page"], ["right", "Marge droite de page"]]) {
 			const label = titleText + " (" + unit + ")";
 			const name = "margin-" + side;
-			const wrapper = container.ownerDocument.createElement("label"); wrapper.className = "bookbinder-page-field";
-			const title = container.ownerDocument.createElement("span"); title.textContent = label; wrapper.append(title);
-			const input = container.ownerDocument.createElement("input"); input.type = "number"; input.step = "any"; input.min = "0"; input.max = "300"; input.placeholder = "Auto";
+			const wrapper = this.makeEl("label"); wrapper.className = "bookbinder-page-field";
+			const title = this.makeEl("span"); title.textContent = label; wrapper.append(title);
+			const input = this.makeEl("input"); input.type = "number"; input.step = "any"; input.min = "0"; input.max = "300"; input.placeholder = "Auto";
 			input.setAttribute("aria-label", label);
 			const raw = this.presentation.page![name];
 			input.value = raw === undefined ? "" : this.relativeUnits && /^-?[\d.]+em$/.test(String(raw)) ? String(parseFloat(String(raw))) : String(Number((parseFloat(computed.getPropertyValue("padding-" + side)) / basis).toFixed(4)));
@@ -265,19 +268,20 @@ export class StyleEditor {
 	private update(): void {
 		if (!this.rules) return;
 		this.previewLabel.textContent = this.catalog.find(style => style.selector === this.selected)?.label ?? this.selected;
-		const accent = getComputedStyle(this.toolbar).getPropertyValue("--text-accent") || "Highlight";
+		const accent = this.toolbar.ownerDocument.defaultView!.getComputedStyle(this.toolbar).getPropertyValue("--text-accent") || "Highlight";
 		const page = this.presentation.page ?? {};
 		// @page inherits its font from the root; preview padding must use the same reference.
 		const padding = ["top", "right", "bottom", "left"].map(side => String(page["margin-" + side] ?? "1.2em").replace(/^(-?[\d.]+)em$/, "$1rem")).join(" ");
 		this.rules.textContent = `html{color:#222;background:white}body{margin:0;padding:${padding}}
 			[data-book-style]{cursor:pointer}[data-book-style]:focus-visible{outline:2px solid ${accent};outline-offset:4px}
 			.bookbinder-selected{outline:2px solid ${accent};outline-offset:4px}
+			.bookbinder-preview-visible{display:block!important}
 			${projectCss(this.presentation).replace(/@font-face\s*\{[^}]*\}/g, "")}`;
 		const preview = this.frame.contentDocument!;
 		// Hidden export styles stay visible in the editor so they can be selected.
 		for (const element of [preview.body, ...preview.querySelectorAll<HTMLElement>("[data-book-style]")]) {
-			element.style.removeProperty("display");
-			if (this.frame.contentWindow!.getComputedStyle(element).display === "none") element.style.display = "block";
+			element.classList.remove("bookbinder-preview-visible");
+			if (this.frame.contentWindow!.getComputedStyle(element).display === "none") element.classList.add("bookbinder-preview-visible");
 			if (element === preview.body) continue;
 			element.classList.toggle("bookbinder-selected", element.dataset.bookStyle === this.selected);
 			element.setAttribute("aria-pressed", String(element.dataset.bookStyle === this.selected));
@@ -288,41 +292,41 @@ export class StyleEditor {
 		const document = this.toolbar.ownerDocument;
 		const focused = this.toolbar.contains(document.activeElement) ? document.activeElement?.getAttribute("aria-label") : null;
 		this.toolbar.replaceChildren();
-		const header = document.createElement("div"); header.className = "bookbinder-style-header"; this.toolbar.append(header);
-		const navigation = document.createElement("div"); navigation.className = "bookbinder-inspector-tabs";
+		const header = this.makeEl("div"); header.className = "bookbinder-style-header"; this.toolbar.append(header);
+		const navigation = this.makeEl("div"); navigation.className = "bookbinder-inspector-tabs";
 		navigation.setAttribute("aria-label", "Catégories du style"); this.toolbar.append(navigation);
 		const panels = ["Caractère", "Paragraphe", "Enchaînement"].map(() => {
-			const panel = document.createElement("div"); panel.className = "bookbinder-inspector-panel"; this.toolbar.append(panel); return panel;
+			const panel = this.makeEl("div"); panel.className = "bookbinder-inspector-panel"; this.toolbar.append(panel); return panel;
 		});
-		const selectSection = mountProjectTabs(navigation, panels, ["Caractère", "Paragraphe", "Enchaînement"], () => { this.section = panels.findIndex(panel => !panel.hidden); });
+		const selectSection = mountProjectTabs(navigation, panels, ["Caractère", "Paragraphe", "Enchaînement"], () => { this.section = panels.findIndex(panel => !panel.hidden); }, this.makeEl);
 		selectSection(this.section);
 		const row = (parent: HTMLElement, className: string) => {
-			const element = document.createElement("div"); element.className = className; parent.append(element); return element;
+			const element = this.makeEl("div"); element.className = className; parent.append(element); return element;
 		};
 		const type = row(panels[0], "bookbinder-character-main");
 		const character = row(panels[0], "bookbinder-character-options");
 		const emphasis = row(character, "bookbinder-style-emphasis"); emphasis.setAttribute("role", "group"); emphasis.setAttribute("aria-label", "Graisse et italique");
 		const paragraph = row(panels[1], "bookbinder-paragraph-main");
 		const alignField = row(paragraph, "bookbinder-toolbar-field");
-		const alignLabel = document.createElement("span"); alignLabel.textContent = "Alignement"; alignField.append(alignLabel);
+		const alignLabel = this.makeEl("span"); alignLabel.textContent = "Alignement"; alignField.append(alignLabel);
 		const alignment = row(alignField, "bookbinder-style-alignment"); alignment.setAttribute("role", "group"); alignment.setAttribute("aria-label", "Alignement du paragraphe");
 		const margins = row(panels[1], "bookbinder-style-margins");
 		panels[2].classList.add("bookbinder-style-flow");
 		const sample = this.sample();
 		const computed = this.frame.contentWindow!.getComputedStyle(sample, this.catalog.find(style => style.selector === this.selected)?.pseudo);
 		const field = (parent: HTMLElement, label: string) => {
-			const wrapper = document.createElement("label"); wrapper.className = "bookbinder-toolbar-field";
+			const wrapper = this.makeEl("label"); wrapper.className = "bookbinder-toolbar-field";
 			const unit = label.match(/ \((em|pt)\)$/)?.[1];
 			if (unit) wrapper.dataset.unit = unit;
 			const names: Record<string, string> = { "Espacement des caractères": "Approche", "Marge haute": "Haut", "Marge basse": "Bas", "Marge gauche": "Gauche", "Marge droite": "Droite" };
 			const title = label.replace(/ \((em|pt)\)$/, "");
-			const name = document.createElement("span"); name.textContent = names[title] ?? title; wrapper.append(name);
+			const name = this.makeEl("span"); name.textContent = names[title] ?? title; wrapper.append(name);
 			parent.append(wrapper); return wrapper;
 		};
 		const select = (parent: HTMLElement, label: string, options: Record<string, string>, current: string, change: (value: string) => void) => {
-			const input = document.createElement("select"); input.setAttribute("aria-label", label);
-			for (const [value, text] of Object.entries(options)) { const option = document.createElement("option"); option.value = value; option.textContent = text; input.append(option); }
-			if (!(current in options)) { const option = document.createElement("option"); option.value = current; option.textContent = current; input.append(option); }
+			const input = this.makeEl("select"); input.setAttribute("aria-label", label);
+			for (const [value, text] of Object.entries(options)) { const option = this.makeEl("option"); option.value = value; option.textContent = text; input.append(option); }
+			if (!(current in options)) { const option = this.makeEl("option"); option.value = current; option.textContent = current; input.append(option); }
 			input.value = current; input.addEventListener("change", () => change(input.value)); field(parent, label).append(input);
 		};
 		select(header, this.options.rules ? "Règle" : "Style", Object.fromEntries(this.catalog.map(style => [style.selector, style.label])), this.selected, value => {
@@ -332,7 +336,7 @@ export class StyleEditor {
 		for (const filename of new Set([...this.presentation.fonts, ...this.fonts.keys()])) families[fontFamily(filename)] = filename.split(/[/\\]/).pop()!;
 		select(type, "Police", families, String(this.values()["font-family"] ?? ""), value => this.set("font-family", value || undefined));
 		const number = (parent: HTMLElement, label: string, property: string, effective: number, minimum: number, maximum: number, unit: string) => {
-			const input = document.createElement("input"); input.type = "number"; input.min = String(minimum); input.max = String(maximum); input.step = "any";
+			const input = this.makeEl("input"); input.type = "number"; input.min = String(minimum); input.max = String(maximum); input.step = "any";
 			input.placeholder = "Auto"; input.setAttribute("aria-label", label);
 			input.value = this.values()[property] === undefined ? "" : String(Math.round(effective * 100) / 100);
 			input.addEventListener("input", () => {
@@ -346,7 +350,7 @@ export class StyleEditor {
 		const length = (property: string) => this.relativeUnits ? this.emValue(property) : points(property);
 		number(type, "Corps (" + unit + ")", "font-size", length("font-size"), this.relativeUnits ? 0.1 : 1, this.relativeUnits ? 20 : 200, unit);
 		const button = (parent: HTMLElement, label: string, icon: string, active: boolean | "mixed" | undefined, action: () => void) => {
-			const input = document.createElement("button"); input.type = "button"; input.className = "clickable-icon"; input.title = label + (active === "mixed" ? " : Auto" : "");
+			const input = this.makeEl("button"); input.type = "button"; input.className = "clickable-icon"; input.title = label + (active === "mixed" ? " : Auto" : "");
 			if (this.options.setIcon) this.options.setIcon(input, icon); else input.textContent = label;
 			input.setAttribute("aria-label", label); if (active !== undefined) input.setAttribute("aria-pressed", String(active));
 			if (active === "mixed") input.dataset.auto = "true";
@@ -361,7 +365,7 @@ export class StyleEditor {
 		for (const [value, label] of [["left", "Gauche"], ["center", "Centré"], ["right", "Droite"], ["justify", "Justifié"]]) {
 			button(alignment, "Aligner : " + label, "align-" + value, this.values()["text-align"] === value, () => this.set("text-align", value));
 		}
-		const color = document.createElement("input"); color.type = "color"; color.setAttribute("aria-label", "Couleur du texte");
+		const color = this.makeEl("input"); color.type = "color"; color.setAttribute("aria-label", "Couleur du texte");
 		const rgb = computed.color.match(/\d+/g)?.slice(0, 3).map(Number) ?? [0, 0, 0];
 		color.value = "#" + rgb.map(value => Math.min(255, value).toString(16).padStart(2, "0")).join("");
 		const colorValue = this.values().color;

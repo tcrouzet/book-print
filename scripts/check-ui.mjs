@@ -6,9 +6,18 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { build } from "esbuild";
+import ts from "typescript";
 import { evaluateInChrome } from "./browser-check.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
+const settingsSource = ts.createSourceFile("settings-tab.ts", await readFile(path.join(root, "plugin/settings-tab.ts"), "utf8"), ts.ScriptTarget.Latest, true);
+const settingsClass = settingsSource.statements.find(node => ts.isClassDeclaration(node) && node.name?.text === "BookbinderSettingTab");
+const definitionsMethod = settingsClass.members.find(node => ts.isMethodDeclaration(node) && node.name.getText(settingsSource) === "getSettingDefinitions");
+const definitions = new Function(definitionsMethod.body.getText(settingsSource)).call(new Proxy({}, { get() { throw new Error("Settings indexing must not access the app or run I/O"); } }));
+const indexedSettings = definitions.flatMap(group => group.items);
+for (const name of ["Projet de livre", "Dossier de génération", "Pandoc", "LaTeX", "Chemins personnalisés"]) {
+ assert.ok(indexedSettings.some(setting => setting.name === name && typeof setting.render === "function"), "Searchable setting: " + name);
+}
 const directory = await mkdtemp(path.join(tmpdir(), "bookbinder-ui-"));
 await build({
 	stdin: { contents: 'export * from "./plugin/project.ts"; export * from "./plugin/project-files.ts"; export * from "./plugin/epub.ts"; export * from "./plugin/presentation.ts"; export * from "./plugin/tools.ts"; export { resources } from "./scripts/resources.ts";', resolveDir: root },
@@ -24,6 +33,11 @@ const browser = await build({
 });
 const styles = await readFile(path.join(root, "styles.css"), "utf8");
 const check = async assets => {
+	const makeEl = tag => document.createElement(tag);
+	const parseSample = html => {
+		const parsed = new DOMParser().parseFromString(html, "text/html");
+		const fragment = document.createDocumentFragment(); fragment.append(...Array.from(parsed.body.childNodes)); return fragment;
+	};
 	const assert = (condition, message) => { if (!condition) throw new Error(message); };
 	const note = document.createElement("div");
 	note.innerHTML = '<a href="obsidian://bookbinder">Modifier le projet</a><a href="https://example.org">Autre lien</a>';
@@ -67,19 +81,19 @@ const check = async assets => {
 	const presentation = { style: {}, page: {}, headings: {}, fonts: [] };
 	let changed = 0;
 	let closeRequested = 0;
-	const editor = new BookUI.StyleEditor(container, presentation, assets.baseCss, () => changed++, () => closeRequested++);
+	const editor = new BookUI.StyleEditor(container, presentation, assets.baseCss, () => changed++, () => closeRequested++, { sanitizeHTMLToDom: parseSample, createEl: makeEl });
 	await editor.ready;
 	await editor.mountPage(formatPanels[2].children[0]);
 	const rulesPanel = formatPanels[2].children[2];
-	const ruleEditor = new BookUI.StyleEditor(rulesPanel, presentation, assets.baseCss, () => changed++, undefined, { format: "epub", rules: true });
+	const ruleEditor = new BookUI.StyleEditor(rulesPanel, presentation, assets.baseCss, () => changed++, undefined, { sanitizeHTMLToDom: parseSample, createEl: makeEl, format: "epub", rules: true });
 	await ruleEditor.ready;
 	const otherEditors = [];
 	for (const [index, format] of formatPanels.slice(0, 2).entries()) {
-		const independent = new BookUI.StyleEditor(format.children[1], { style: {}, page: {}, headings: {}, fonts: [] }, assets.baseCss, () => changed++, undefined, { format: index === 0 ? "pdf" : "docx" });
+		const independent = new BookUI.StyleEditor(format.children[1], { style: {}, page: {}, headings: {}, fonts: [] }, assets.baseCss, () => changed++, undefined, { sanitizeHTMLToDom: parseSample, createEl: makeEl, format: index === 0 ? "pdf" : "docx" });
 		await independent.ready; await independent.mountPage(format.children[0]); otherEditors.push(independent);
 	}
-	for (const [index, format] of formatPanels.entries()) BookUI.mountProjectTabs(format.tabs, format.children, index === 2 ? ["Page", "Styles", "Règles"] : ["Page", "Styles"], () => { (index === 2 ? editor : otherEditors[index]).refresh(); if (index === 2) ruleEditor.refresh(); });
-	BookUI.mountProjectTabs(navigation, panels, ["Généralités", "PDF", "DOCX", "ePub"], () => editor.refresh());
+	for (const [index, format] of formatPanels.entries()) BookUI.mountProjectTabs(format.tabs, format.children, index === 2 ? ["Page", "Styles", "Règles"] : ["Page", "Styles"], () => { (index === 2 ? editor : otherEditors[index]).refresh(); if (index === 2) ruleEditor.refresh(); }, makeEl);
+	BookUI.mountProjectTabs(navigation, panels, ["Généralités", "PDF", "DOCX", "ePub"], () => editor.refresh(), makeEl);
 	assert(!panels[0].hidden && panels.slice(1).every(panel => panel.hidden), "Les généralités doivent apparaître seules en premier");
 	assert(getComputedStyle(layout).display === "block" && getComputedStyle(host).resize === "both", "Fenêtre en une colonne et redimensionnable");
 	const tabs = navigation.querySelectorAll("button");
@@ -136,6 +150,10 @@ const check = async assets => {
 	const styleChoices = new Set(Array.from(field("Style").options, option => option.value));
 	for (const selector of ["p", "h1", "h6", "blockquote p", "ul", "ol", "table", "pre", "code", "em", "strong", "del", ".smallcaps", "sub", "sup", "p.tab", "hr", "a", "img"]) assert(styleChoices.has(selector), "Style Markdown absent : " + selector);
 	for (const selector of ["body", "h1.title", "p.subtitle", "div.poem-solo", "div.top-para", "#dédicace p", ".thin-space", "h2 + p::first-letter"]) assert(!styleChoices.has(selector), "Style non Markdown présent : " + selector);
+	change("Affichage", "none");
+	assert(presentation.style.display === "none" && computed("p").display !== "none", "Un paragraphe masqué à l’export reste visible dans l’aperçu");
+	change("Affichage", "");
+	assert(presentation.style.display === undefined && computed("p").display !== "none", "Le retour en Auto conserve un aperçu visible");
 	for (const label of ["Gras", "Italique", "Aligner : Gauche", "Aligner : Centré", "Aligner : Droite", "Aligner : Justifié"]) assert(field(label).classList.contains("clickable-icon") && field(label).title, "Bouton Obsidian accessible : " + label);
 	assert(field("Police").value === "" && field("Alignement automatique").getAttribute("aria-pressed") === "true", "Police et alignement en Auto");
 	change("Style", "h2");
@@ -223,11 +241,11 @@ const check = async assets => {
 	assert(parseFloat(rulesFrame.contentWindow.getComputedStyle(initial, "::first-letter").fontSize) === 32, "Lettrine relative au paragraphe");
 	formatPanels[2].tabs.querySelectorAll("button")[1].click(); fieldScope = epubPanel;
 	const abandonedContainer = document.createElement("div"); document.body.append(abandonedContainer);
-	const abandoned = new BookUI.StyleEditor(abandonedContainer, { style: {}, headings: {}, fonts: [] }, assets.baseCss, () => {});
+	const abandoned = new BookUI.StyleEditor(abandonedContainer, { style: {}, headings: {}, fonts: [] }, assets.baseCss, () => {}, undefined, { sanitizeHTMLToDom: parseSample, createEl: makeEl });
 	abandoned.dispose(); await abandoned.ready; abandonedContainer.remove();
 	const legacyContainer = document.createElement("div"); document.body.append(legacyContainer);
 	const legacyPresentation = { style: { "page-margin": "20pt", "font-size": "12pt", "line-height": "18pt" }, headings: { h2: { "font-size": "24pt", "margin-top": "12pt" } }, fonts: [] };
-	const legacy = new BookUI.StyleEditor(legacyContainer, legacyPresentation, assets.baseCss, () => {});
+	const legacy = new BookUI.StyleEditor(legacyContainer, legacyPresentation, assets.baseCss, () => {}, undefined, { sanitizeHTMLToDom: parseSample, createEl: makeEl });
 	await legacy.ready;
 	legacy.setBaseCss(assets.baseCss + "body{font-size:20px}");
 	legacy.normalizeUnits();
@@ -261,7 +279,7 @@ const check = async assets => {
 	}
 	host.style.width = "800px";
 	container.querySelectorAll('.bookbinder-inspector-tabs [role="tab"]')[0].click();
-	const cover = await BookUI.renderCover({ title: "Projet visuel", author: "Auteur", subtitle: "", footer: "Épreuve" });
+	const cover = await BookUI.renderCover({ title: "Projet visuel", author: "Auteur", subtitle: "", footer: "Épreuve" }, makeEl);
 	let coverBinary = ""; for (const byte of cover) coverBinary += String.fromCharCode(byte);
 	return { presentation, pdf: otherEditors[0].presentation, docx: otherEditors[1].presentation, cover: btoa(coverBinary), changed };
 };

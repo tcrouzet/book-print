@@ -31,11 +31,11 @@ The assembly happens in memory. Your source notes stay intact, and Bookbinder cr
 
 The EPUB is saved beside the source file, or inside the selected source folder. To choose another destination anywhere on your computer, use **Dossier de génération → Parcourir…** in Bookbinder's settings. The reset button restores the default destination.
 
-EPUB files stand out in the explorer with your theme's accent colour. Open one and choose **Lire l'EPUB** to launch your computer's reading app. If an export fails, Bookbinder keeps the last successfully generated EPUB.
+EPUB files stand out in the explorer with your theme's accent colour. Open one and choose **Lire l’ePub** to launch your computer's reading app. If an export fails, Bookbinder keeps the last successfully generated EPUB.
 
 ## Give each book its own project
 
-Open **Settings → Bookbinder → Créer/Ouvrir projet** and choose your manuscript folder.
+Open **Settings → Bookbinder → Créer/ouvrir projet** and choose your manuscript folder.
 
 Set the title, author, language and other book details, then save. The same button opens an existing project. You can export without creating one: Bookbinder uses the file or folder name as the title and the default presentation. The default book language is French; choose another language in the project settings.
 
@@ -68,6 +68,8 @@ The built-in presentation works without custom fonts. You can also supply your o
 ## Local processing
 
 Bookbinder assembles the manuscript locally, renders the automatic cover in Obsidian and runs Pandoc on your computer. It does not upload your manuscript to a conversion service.
+
+The desktop plugin accesses project resources and export destinations through the filesystem, including folders you select outside the vault. It launches local executables to check Pandoc and LaTeX versions and uses Pandoc for conversion. These operations require filesystem and process access; commands run directly, without a system shell.
 
 Opening the settings contacts GitHub and the official TeX sites to check published tool versions. Installer links open only when clicked. Custom fonts and images come from the files you choose.
 

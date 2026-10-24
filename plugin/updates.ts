@@ -1,3 +1,4 @@
+import * as timers from "node:timers";
 import { realpath } from "node:fs/promises";
 import { compareVersions, type Tool, type ToolStatus } from "./tools.ts";
 
@@ -44,13 +45,13 @@ export async function checkUpdate(tool: Tool, status: ToolStatus, read: (url: st
 	const resolved = status.state === "found" ? { ...status, path: await realpath(status.path).catch(() => status.path) } : status;
 	let url = updatePage(tool, resolved, platform);
 	const source = distribution(tool, status, platform);
-	let timer: ReturnType<typeof setTimeout> | undefined;
+	let timer: ReturnType<typeof timers.setTimeout> | undefined;
 	try {
 		const endpoint = source === "texlive" ? "https://www.tug.org/texlive/"
 			: `https://api.github.com/repos/${source === "pandoc" ? "jgm/pandoc" : "MiKTeX/miktex"}/releases/latest`;
 		const text = await Promise.race([
 			read(endpoint),
-			new Promise<string>((_, reject) => { timer = setTimeout(() => reject(new Error("Timeout")), 8000); }),
+			new Promise<string>((_, reject) => { timer = timers.setTimeout(() => reject(new Error("Timeout")), 8000); }),
 		]);
 		if (text.length > 1_000_000) throw new Error("Réponse trop volumineuse");
 		let published: string | undefined;
@@ -84,6 +85,6 @@ export async function checkUpdate(tool: Tool, status: ToolStatus, read: (url: st
 	} catch {
 		return { state: "unavailable", message: "Comparaison en ligne indisponible. Le site officiel reste accessible.", url, action: "Ouvrir le site officiel" };
 	} finally {
-		clearTimeout(timer);
+		timers.clearTimeout(timer);
 	}
 }

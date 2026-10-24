@@ -1,21 +1,14 @@
-import { App, ButtonComponent, Modal, Notice, Setting, parseYaml, setIcon, stringifyYaml } from "obsidian";
+import { App, ButtonComponent, Modal, Notice, Setting, parseYaml, sanitizeHTMLToDom, setIcon, stringifyYaml } from "obsidian";
 import { readFile } from "node:fs/promises";
 import * as path from "node:path";
 import { localResource, parseProject, type BookProject } from "./project";
 import { loadFont, readProjectFile, saveProjectFile, type ImportedFont, type ProjectFile } from "./project-files";
 import { StyleEditor } from "./style-editor";
 import { mountProjectTabs } from "./project-tabs";
+import { chooseFiles } from "./dialogs";
 
 function record(value: unknown): Record<string, unknown> {
 	return value && typeof value === "object" && !Array.isArray(value) ? { ...value as Record<string, unknown> } : {};
-}
-
-async function chooseFiles(title: string, extensions: string[], multiple = false): Promise<string[]> {
-	const { remote } = require("electron") as { remote: { dialog: { showOpenDialog(options: {
-		title: string; properties: string[]; filters: { name: string; extensions: string[] }[];
-	}): Promise<{ canceled: boolean; filePaths: string[] }> } } };
-	const result = await remote.dialog.showOpenDialog({ title, properties: multiple ? ["openFile", "multiSelections"] : ["openFile"], filters: [{ name: title, extensions }] });
-	return result.canceled ? [] : result.filePaths;
 }
 
 export async function openProjectEditor(app: App, directory: string, baseCss: string): Promise<void> {
@@ -180,7 +173,7 @@ class ProjectModal extends Modal {
 				: "Auto conserve les marges du modèle ; les valeurs saisies ici sont exprimées en millimètres.", cls: "bookbinder-muted" });
 			const pageFields = page.createDiv({ cls: "bookbinder-page-fields" });
 			presentation.createEl("h3", { text: "Styles" });
-			const editor = new StyleEditor(presentation, this.projects[format], this.baseCss, () => this.markDirty(), () => this.close(), { format, setIcon });
+			const editor = new StyleEditor(presentation, this.projects[format], this.baseCss, () => this.markDirty(), () => this.close(), { format, setIcon, sanitizeHTMLToDom });
 			this.editors.set(format, editor);
 			void editor.mountPage(pageFields);
 			const panels = [page, presentation];
@@ -189,7 +182,7 @@ class ProjectModal extends Modal {
 				const rules = panel.createDiv({ cls: "bookbinder-project-presentation" });
 				rules.createEl("h3", { text: "Règles" });
 				rules.createEl("p", { text: "Premiers paragraphes après un titre et lettrine du modèle après un titre 2.", cls: "bookbinder-muted" });
-				this.ruleEditor = new StyleEditor(rules, this.project, this.baseCss, () => this.markDirty(), () => this.close(), { format, setIcon, rules: true });
+				this.ruleEditor = new StyleEditor(rules, this.project, this.baseCss, () => this.markDirty(), () => this.close(), { format, setIcon, sanitizeHTMLToDom, rules: true });
 				panels.push(rules); labels.push("Règles");
 			}
 			const select = mountProjectTabs(tabs, panels, labels, () => { editor.refresh(); if (format === "epub") this.ruleEditor?.refresh(); });
@@ -220,7 +213,7 @@ class ProjectModal extends Modal {
 
 	private metadata(container: HTMLElement, key: string, label: string, multiline = false, required = false): void {
 		const value = this.project.metadata[key];
-		const text = Array.isArray(value) ? value.join(key === "author" ? "\n" : ", ") : value instanceof Date ? value.toISOString().slice(0, 10) : String(value ?? "");
+		const text = Array.isArray(value) ? value.join(key === "author" ? "\n" : ", ") : value instanceof Date ? value.toISOString().slice(0, 10) : typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? String(value) : "";
 		const setting = new Setting(container).setName(label);
 		if (key === "lang") {
 			const current = text || "fr";
@@ -258,7 +251,7 @@ class ProjectModal extends Modal {
 
 	private image(container: HTMLElement, key: string, label: string, fallback: string): void {
 		const value = this.data[key] ?? (key === "cover" ? this.project.cover : this.project.background);
-		const setting = new Setting(container).setName(label).setDesc(String(value || fallback));
+		const setting = new Setting(container).setName(label).setDesc(typeof value === "string" && value ? value : fallback);
 		setting.addButton(button => button.setButtonText("Parcourir…").onClick(() => this.action(async () => {
 			const [filename] = await chooseFiles(label, ["jpg", "jpeg", "png", "webp", "gif", "svg"]);
 			if (!filename) return;
@@ -334,7 +327,7 @@ class ProjectModal extends Modal {
 	close(): void {
 		if (this.saving) return;
 		if (this.dirty && !this.discard) {
-			this.error.setText("Modifications non enregistrées. Enregistrez le projet ou choisissez Fermer sans enregistrer.");
+			this.error.setText("Modifications non enregistrées. Enregistrez le projet avant de fermer ou abandonnez les modifications.");
 			this.discard = true;
 			this.cancelButton?.setButtonText("Fermer sans enregistrer");
 			return;

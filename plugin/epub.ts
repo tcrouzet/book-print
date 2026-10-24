@@ -1,3 +1,4 @@
+import * as timers from "node:timers";
 import { spawn } from "node:child_process";
 import { access, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import * as path from "node:path";
@@ -22,12 +23,12 @@ function runPandoc(executable: string, args: string[], cwd: string, input: strin
 		const child = spawn(executable, args, { cwd, windowsHide: true, stdio: ["pipe", "ignore", "pipe"] });
 		let errorText = "";
 		let timedOut = false;
-		const timer = setTimeout(() => { timedOut = true; child.kill(); }, 300_000);
+		const timer = timers.setTimeout(() => { timedOut = true; child.kill(); }, 300_000);
 		child.stderr.setEncoding("utf8");
 		child.stderr.on("data", (chunk: string) => { errorText = (errorText + chunk).slice(-65536); });
-		child.on("error", error => { clearTimeout(timer); reject(error); });
+		child.on("error", error => { timers.clearTimeout(timer); reject(error); });
 		child.on("close", code => {
-			clearTimeout(timer);
+			timers.clearTimeout(timer);
 			if (timedOut) reject(new Error("Pandoc n’a pas terminé après cinq minutes."));
 			else if (code !== 0) reject(new Error(errorText.trim() || `Pandoc s’est arrêté (code ${code}).`));
 			else resolve();
@@ -50,7 +51,7 @@ export async function exportEpub(request: EpubRequest): Promise<string> {
 			const [target, label] = link.split("|");
 			if (!request.resolveImage) throw new Error(`Impossible de résoudre l’image ![[${target}]] dans ${source.path}.`);
 			const imagePath = request.resolveImage(target, source.path).replace(/\\/g, "/").replace(/</g, "%3C").replace(/>/g, "%3E");
-			return `![${(label ?? "").replace(/[\[\]]/g, "")}](<${imagePath}>)`;
+			return `![${(label ?? "").replace(/[[\]]/g, "")}](<${imagePath}>)`;
 		});
 		return { directory: path.dirname(source.path), content: content + "\n\n" + project.fusion.noteSeparator };
 	});
@@ -90,7 +91,7 @@ export async function exportEpub(request: EpubRequest): Promise<string> {
 		args.push(`--css=${path.join(temporary, "presentation.css")}`, ...fonts.map(filename => `--epub-embed-font=${filename}`));
 		const now = new Date();
 		let count = 0;
-		for (const source of request.sources) for (const _character of source.content) count++;
+		for (const source of request.sources) count += Array.from(source.content).length;
 		const metadata: Record<string, unknown> = { date: now.toISOString().slice(0, 10), ...project.metadata };
 		const title = String(project.metadata.title);
 		Object.assign(metadata, { title: title.replace(/\\n|\n/g, " ") });
@@ -101,8 +102,8 @@ export async function exportEpub(request: EpubRequest): Promise<string> {
 			const format = extension === "svg" ? "svg+xml" : extension === "jpg" ? "jpeg" : extension;
 			const backgroundData = background ? `data:image/${format};base64,${(await readFile(background)).toString("base64")}` : undefined;
 			const image = await request.renderCover({
-				title, author: Array.isArray(metadata.author) ? metadata.author.join(", ") : String(metadata.author ?? ""),
-				subtitle: String(metadata.subtitle ?? ""), background: backgroundData,
+				title, author: Array.isArray(metadata.author) ? metadata.author.join(", ") : typeof metadata.author === "string" ? metadata.author : "",
+				subtitle: typeof metadata.subtitle === "string" ? metadata.subtitle : "", background: backgroundData,
 				footer: `${Math.floor(count / 1000)}k signes - ${now.toLocaleDateString("fr-FR")}`,
 			});
 			coverFile = path.join(temporary, "cover.jpg");

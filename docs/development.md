@@ -93,7 +93,7 @@ node scripts/check-resources.mjs
 - `test:epub` creates a real EPUB with Pandoc and a cover rendered in Chrome. It checks chapter assembly, project exclusion, local footnotes, relative images, XML and preservation of the previous output after failure. It requires Pandoc, Chrome, `/usr/bin/unzip` and `/usr/bin/xmllint` on macOS. `BOOKBINDER_CHROME` selects the Chrome executable for both browser checks.
 - `test:release` checks the workflow and exercises release operations in local Git repositories. It uses Ruby's standard YAML library and simulates publication. ShellCheck runs in CI.
 
-These tools are development dependencies, not plugin runtime requirements. The browser checks do not exercise native Obsidian icons, system protocol handling, native file pickers or the complete Obsidian modal. Process checks use POSIX fixtures; Windows search paths are checked without running Windows executables.
+These tools are development dependencies, not plugin runtime requirements. Browser checks supply native browser element creation and parse the bundled preview samples; they do not exercise Obsidian's DOM helpers, HTML sanitizer, icons, system protocol handling, native file pickers or the complete Obsidian modal. Process checks use POSIX fixtures; Windows search paths are checked without running Windows executables.
 
 ## Source layout
 

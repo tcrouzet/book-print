@@ -24,7 +24,8 @@ const options = { title: "L’expérience\\nhumaine", author: "Thierry Crouzet",
 async function renderInBrowser(options) {
 	const expression = `${browser.outputFiles[0].text}
 	(async () => {
-	    const bytes = await BookCover.renderCover(${JSON.stringify(options)});
+	    const makeEl = tag => document.createElement(tag);
+	    const bytes = await BookCover.renderCover(${JSON.stringify(options)}, makeEl);
 	    const image = new Image();
 	    image.src = URL.createObjectURL(new Blob([bytes], {type:"image/jpeg"}));
 	    await image.decode();
@@ -35,7 +36,7 @@ async function renderInBrowser(options) {
 	    const pixel = color => { const c=document.createElement("canvas"); c.width=8;c.height=8;const ctx=c.getContext("2d");ctx.fillStyle=color;ctx.fillRect(0,0,8,8);return c.toDataURL("image/png").split(",")[1]; };
 	    let binary=""; for(const byte of bytes) binary+=String.fromCharCode(byte);
 	    const result = {width:image.width,height:image.height,red,jpeg:btoa(binary),redImage:pixel("red"),blueImage:pixel("blue")};
-	    const background = await BookCover.renderCover({...${JSON.stringify(options)}, background:"data:image/png;base64,"+(${JSON.stringify(Boolean(options.background))}?result.redImage:result.blueImage)});
+	    const background = await BookCover.renderCover({...${JSON.stringify(options)}, background:"data:image/png;base64,"+(${JSON.stringify(Boolean(options.background))}?result.redImage:result.blueImage)}, makeEl);
 	    if(background.length===bytes.length && background.every((byte,index)=>byte===bytes[index])) throw new Error("Image de fond ignorée");
 	    URL.revokeObjectURL(image.src);
 	    return result;

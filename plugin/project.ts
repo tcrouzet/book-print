@@ -62,7 +62,7 @@ function styles(value: unknown, field: string): Record<string, string | number> 
 	const result = object(value, field);
 	for (const [name, setting] of Object.entries(result)) {
 		if (!styleProperties.has(name) && name !== "page-margin") throw new Error(`${field}.${name} : réglage inconnu.`);
-		if ((typeof setting !== "string" && typeof setting !== "number") || !/^[\p{L}\p{N}\s.,%'"#()\-]+$/u.test(String(setting))) {
+		if ((typeof setting !== "string" && typeof setting !== "number") || !/^[\p{L}\p{N}\s.,%'"#()-]+$/u.test(String(setting))) {
 			throw new Error(`${field}.${name} : valeur de présentation invalide.`);
 		}
 	}

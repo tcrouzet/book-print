@@ -1,3 +1,4 @@
+import { shell } from "electron";
 import { ButtonComponent, FileSystemAdapter, FileView, type TFile } from "obsidian";
 
 // Obsidian conserve cet identifiant dans les onglets déjà ouverts.
@@ -11,11 +12,10 @@ export class EpubView extends FileView {
 		this.contentEl.empty();
 		this.contentEl.createEl("h2", { text: file.basename });
 		const error = this.contentEl.createDiv({ attr: { role: "alert" } });
-		new ButtonComponent(this.contentEl).setButtonText("Lire l’EPUB").setCta().onClick(async () => {
+		new ButtonComponent(this.contentEl).setButtonText("Lire l’ePub").setCta().onClick(async () => {
 			try {
 				const adapter = this.app.vault.adapter;
 				if (!(adapter instanceof FileSystemAdapter)) throw new Error("La lecture nécessite Obsidian sur ordinateur.");
-				const { shell } = require("electron") as { shell: { openPath(filename: string): Promise<string> } };
 				const message = await shell.openPath(adapter.getFullPath(file.path));
 				if (message) throw new Error(`Impossible d’ouvrir l’EPUB : ${message}`);
 			} catch (cause) { error.setText(cause instanceof Error ? cause.message : String(cause)); }

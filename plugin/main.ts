@@ -46,7 +46,7 @@ export default class BookbinderPlugin extends Plugin {
 	async generateEpub(source: TFile | TFolder): Promise<void> {
 		if (this.exporting) { new Notice("Un export Bookbinder est déjà en cours."); return; }
 		this.exporting = true;
-		const notice = new Notice("Préparation de l’EPUB…", 0);
+		const notice = new Notice("Préparation de l’ePub…", 0);
 		try {
 			const adapter = this.app.vault.adapter;
 			if (!(adapter instanceof FileSystemAdapter)) throw new Error("La génération nécessite Obsidian sur ordinateur.");
