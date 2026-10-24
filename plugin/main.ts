@@ -1,7 +1,7 @@
 import { FileSystemAdapter, Notice, Plugin, TFile, TFolder, parseYaml } from "obsidian";
 import * as path from "node:path";
-import { BookPrintSettingTab } from "./settings-tab";
-import { DEFAULT_SETTINGS, parseSettings, type BookPrintSettings } from "./types";
+import { BookbinderSettingTab } from "./settings-tab";
+import { DEFAULT_SETTINGS, parseSettings, type BookbinderSettings } from "./types";
 import { resolveOutputDirectory } from "./output";
 import { resources } from "../scripts/resources";
 import { excluded, isProjectNote, parseProject } from "./project";
@@ -13,21 +13,21 @@ import { readProjectFile } from "./project-files";
 import { linkProjectNote } from "./project-view";
 import { openProjectEditor } from "./project-modal";
 
-export default class BookPrintPlugin extends Plugin {
+export default class BookbinderPlugin extends Plugin {
 	readonly resources = resources;
-	settings: BookPrintSettings = { ...DEFAULT_SETTINGS };
+	settings: BookbinderSettings = { ...DEFAULT_SETTINGS };
 	private exporting = false;
 
 	async onload(): Promise<void> {
 		this.settings = parseSettings(await this.loadData());
-		this.addSettingTab(new BookPrintSettingTab(this.app, this));
+		this.addSettingTab(new BookbinderSettingTab(this.app, this));
 		this.registerView(EPUB_VIEW, leaf => new EpubView(leaf));
 		try { this.registerExtensions(["epub"], EPUB_VIEW); }
-		catch (error) { console.debug("Book Print : l’association des EPUB n’a pas été modifiée.", error); }
-		this.registerObsidianProtocolHandler("book-print", async parameters => {
+		catch (error) { console.debug("Bookbinder : l’association des EPUB n’a pas été modifiée.", error); }
+		for (const protocol of ["bookbinder", "book-print"]) this.registerObsidianProtocolHandler(protocol, async parameters => {
 			try {
 				const file = parameters.file === undefined ? this.app.workspace.getActiveFile() : this.app.vault.getAbstractFileByPath(parameters.file);
-				if (!(file instanceof TFile) || !isProjectNote(file.path) || !file.parent) throw new Error("Ouvrez book-print.md pour modifier le projet.");
+				if (!(file instanceof TFile) || !isProjectNote(file.path) || !file.parent) throw new Error("Ouvrez bookbinder.md pour modifier le projet.");
 				const adapter = this.app.vault.adapter;
 				if (!(adapter instanceof FileSystemAdapter)) throw new Error("Les projets nécessitent Obsidian sur ordinateur.");
 				await openProjectEditor(this.app, adapter.getFullPath(file.parent.path), resources["epub/base.css"]);
@@ -44,7 +44,7 @@ export default class BookPrintPlugin extends Plugin {
 	}
 
 	async generateEpub(source: TFile | TFolder): Promise<void> {
-		if (this.exporting) { new Notice("Un export Book Print est déjà en cours."); return; }
+		if (this.exporting) { new Notice("Un export Bookbinder est déjà en cours."); return; }
 		this.exporting = true;
 		const notice = new Notice("Préparation de l’EPUB…", 0);
 		try {
@@ -74,8 +74,8 @@ export default class BookPrintPlugin extends Plugin {
 				sources.push({ path: adapter.getFullPath(file.path), content });
 			}
 			const pandoc = await detectTool("pandoc", this.settings.pandocPath);
-			if (pandoc.state !== "found") throw new Error(`${pandoc.message} Ouvrez Réglages → Book Print.`);
-			if (compareVersions(pandoc.version, "3.1.1") === -1) throw new Error("L’export EPUB nécessite Pandoc 3.1.1 ou plus récent. Ouvrez Réglages → Book Print pour le mettre à jour.");
+			if (pandoc.state !== "found") throw new Error(`${pandoc.message} Ouvrez Réglages → Bookbinder.`);
+			if (compareVersions(pandoc.version, "3.1.1") === -1) throw new Error("L’export EPUB nécessite Pandoc 3.1.1 ou plus récent. Ouvrez Réglages → Bookbinder pour le mettre à jour.");
 			notice.setMessage("Génération de l’EPUB…");
 			const output = path.join(this.settings.outputDirectory || directory, `${name}.epub`);
 			await exportEpub({ project, sources, directory, output, pandoc: pandoc.path, resources, renderCover, resolveImage: (target, sourcePath) => {
@@ -94,7 +94,7 @@ export default class BookPrintPlugin extends Plugin {
 		}
 	}
 
-	async saveSettings(settings: BookPrintSettings): Promise<void> {
+	async saveSettings(settings: BookbinderSettings): Promise<void> {
 		const next = parseSettings(settings);
 		await this.saveData(next);
 		this.settings = next;

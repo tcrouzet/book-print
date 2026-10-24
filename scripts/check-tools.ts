@@ -7,7 +7,7 @@ import { parseSettings } from "../plugin/types.ts";
 import { checkUpdate, pandocInstaller, updatePage } from "../plugin/updates.ts";
 import { resolveOutputDirectory } from "../plugin/output.ts";
 
-const directory = await mkdtemp(path.join(tmpdir(), "book-print-tools-"));
+const directory = await mkdtemp(path.join(tmpdir(), "bookbinder-tools-"));
 const bin = path.join(directory, "dossier avec espaces");
 await mkdir(bin);
 const executable = path.join(bin, "pandoc");

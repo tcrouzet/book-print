@@ -2,6 +2,7 @@ import type { BookProject } from "./project";
 
 export function fontFamily(filename: string): string {
 	const name = filename.split(/[/\\]/).pop() ?? filename;
+	// Ces identifiants de polices sont conservés dans les propriétés des anciens projets.
 	return "BookPrint-" + Array.from(name).map(character => character.codePointAt(0)!.toString(16)).join("-");
 }
 

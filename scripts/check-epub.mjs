@@ -10,7 +10,7 @@ import { evaluateInChrome } from "./browser-check.mjs";
 
 const exec = promisify(execFile);
 const root = path.resolve(import.meta.dirname, "..");
-const directory = await mkdtemp(path.join(tmpdir(), "book-print-epub-"));
+const directory = await mkdtemp(path.join(tmpdir(), "bookbinder-epub-"));
 await build({
 	stdin: { contents: 'export * from "./plugin/project.ts"; export * from "./plugin/epub.ts"; export * from "./plugin/tools.ts"; export { resources } from "./scripts/resources.ts";', resolveDir: root },
 	bundle: true, platform: "node", format: "cjs", outfile: path.join(directory, "core.cjs"),
@@ -56,8 +56,9 @@ const sources = [
 	{ path: path.join(directory, "partie A/01.md"), content: "---\ntitle: Ne doit pas remplacer le YAML\n---\n## Première\n\nA&B < C. «\u00a0Bonjour\u00a0» Est-ce vrai\u00a0? Fin\u202f!\n\nUne note[^1], rappel[^1].\n\n![Rouge](<image avec espaces.png>)\n\n[^1]: Note *première*.\n\n<!-- privé -->\n%% confidentiel %%\n\n```\nÀ droite *italique*\n```\n" },
 	{ path: path.join(directory, "partie B/02.md"), content: "## Deuxième\n\nAutre note[^1].\n\n![Bleu](image%20avec%20espaces.png)\n\n[^1]: Note **deuxième**.\n    Suite de la note.\n\n€€Poème un\n\nPoème deux€€\n" },
 ];
-sources.push({ path: path.join(directory, "book-print.md"), content: "---\ntitle: Projet\n---\nPROJET_A_EXCLURE\n[Modifier le projet](obsidian://book-print)\n" });
-sources.push({ path: path.join(directory, "partie A/book-print.md"), content: "PROJET_IMBRIQUE_A_EXCLURE\n" });
+sources.push({ path: path.join(directory, "bookbinder.md"), content: "---\ntitle: Projet\n---\nPROJET_A_EXCLURE\n[Modifier le projet](obsidian://bookbinder)\n" });
+sources.push({ path: path.join(directory, "partie A/bookbinder.md"), content: "PROJET_IMBRIQUE_A_EXCLURE\n" });
+sources.push({ path: path.join(directory, "book-print.md"), content: "ANCIEN_PROJET_A_EXCLURE\n" });
 sources[0].content += "\n<!-- ![[image absente.png]] -->\n%% ![[autre image absente.png]] %%\n\n![[image avec espaces.png]]\n";
 sources[0].content += "\n[Capitales]{.smallcaps} H~2~O m^2^ ~~barré~~.\n\n```{.tab}\n\tLigne tabulée *littérale*\n```\n\n> Une citation Markdown.\n";
 const project = parseProject({ title: options.title, author: options.author, identifier: "ISBN-0", epub: { style: { "font-size": "1.1em" } } }, "Sans effet");
@@ -102,7 +103,7 @@ assert.match(content, /À droite \*italique\*/);
 assert.match(content, /Ligne tabulée \*littérale\*/);
 assert.match(content, /<blockquote/);
 assert.doesNotMatch(content, /privé|confidentiel|Ne doit pas remplacer/);
-assert.doesNotMatch(content, /PROJET_A_EXCLURE|PROJET_IMBRIQUE_A_EXCLURE|obsidian:\/\/book-print/);
+assert.doesNotMatch(content, /PROJET_A_EXCLURE|PROJET_IMBRIQUE_A_EXCLURE|obsidian:\/\/bookbinder/);
 const coverItem = content.match(/<item\s[^>]*properties="cover-image"[^>]*>/)?.[0];
 const coverName = coverItem?.match(/href="([^"]+)"/)?.[1];
 assert.ok(coverName, "Couverture déclarée dans le manifeste EPUB");
@@ -119,7 +120,7 @@ await assert.rejects(exportEpub({ ...request, sources: [sources[2]] }), /Aucun f
 assert.deepEqual(await readFile(output), before, "Une note de projet seule conserve le dernier EPUB");
 await assert.rejects(exportEpub({ ...request, sources: [{ path: sources[0].path, content: "![Manquante](absente.png)" }] }), /absente|resource|image/i);
 assert.deepEqual(await readFile(output), before, "Un échec conserve le dernier EPUB");
-assert.ok(!(await readdir(directory)).some(name => name.startsWith(".book-print-")), "Ressources temporaires nettoyées");
+assert.ok(!(await readdir(directory)).some(name => name.startsWith(".bookbinder-")), "Ressources temporaires nettoyées");
 assert.ok(!(await readdir(directory, { recursive: true })).some(name => name.endsWith(".md")), "Aucun Markdown intermédiaire");
 await exportEpub({ ...request, project: parseProject({ cover: "cover.jpg" }, "Fichier seul"), sources: [sources[0]], output: path.join(directory, "Fichier seul.epub"), renderCover: async () => { throw new Error("La couverture fournie doit être utilisée"); } });
 await exportEpub({ ...request, project: parseProject(undefined, "Sans YAML"), sources: [sources[0]], output: path.join(directory, "Sans YAML.epub") });

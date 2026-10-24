@@ -1,12 +1,12 @@
 export function isProjectNote(filename: string): boolean {
-	return filename.split("/").pop()?.toLowerCase() === "book-print.md";
+	return ["bookbinder.md", "book-print.md"].includes(filename.split("/").pop()?.toLowerCase() ?? "");
 }
 
 export function linkProjectNote(element: HTMLElement, sourcePath: string, vault: string): void {
 	if (!isProjectNote(sourcePath)) return;
 	for (const link of element.querySelectorAll<HTMLAnchorElement>("a[href]")) {
-		if (/^obsidian:\/\/book-print\/?$/i.test(link.getAttribute("href") ?? "")) {
-			link.href = `obsidian://book-print?vault=${encodeURIComponent(vault)}&file=${encodeURIComponent(sourcePath)}`;
+		if (/^obsidian:\/\/(bookbinder|book-print)\/?$/i.test(link.getAttribute("href") ?? "")) {
+			link.href = `obsidian://bookbinder?vault=${encodeURIComponent(vault)}&file=${encodeURIComponent(sourcePath)}`;
 		}
 	}
 }

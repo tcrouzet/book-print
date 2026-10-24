@@ -63,7 +63,7 @@ export async function exportEpub(request: EpubRequest): Promise<string> {
 	}
 	await mkdir(path.dirname(output), { recursive: true });
 	// Staging beside the destination lets rename preserve the last successful export.
-	const temporary = await mkdtemp(path.join(path.dirname(output), ".book-print-"));
+	const temporary = await mkdtemp(path.join(path.dirname(output), ".bookbinder-"));
 	try {
 		const args = ["--to=epub3", "--standalone", "--fail-if-warnings", `--toc-depth=${project.tocDepth}`, `--split-level=${project.splitLevel}`, "--wrap=none"];
 		for (const name of ["book-reader.lua", "epub-thin-space.lua", "epub-tab.lua"]) {

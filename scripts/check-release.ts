@@ -38,7 +38,7 @@ const versionCheck = validation.split("\n").find(line => line.startsWith("node -
 assert.ok(versionCheck);
 for (const script of [validation, publication]) assert.equal(spawnSync("bash", ["-n", "-c", script]).status, 0);
 
-const directory = mkdtempSync(path.join(tmpdir(), "book-print-release-test-"));
+const directory = mkdtempSync(path.join(tmpdir(), "bookbinder-release-test-"));
 const scenarios = ["ok", "dirty", "trunk", "without-index", "wrong-branch", "invalid-version", "versions-failure", "test-failure", "build-failure", "resource-failure", "push-failure", "api-failure", "mismatch", "tag-push-failure"];
 try {
 	for (const scenario of scenarios) {
@@ -116,7 +116,7 @@ if (args[0] === "repo" && args[1] === "view") {
 		assert.ifError(result.error);
 		const succeeds = ["ok", "dirty", "trunk", "without-index"].includes(scenario);
 		assert.equal(result.status === 0, succeeds, `${scenario}\n${result.stdout}\n${result.stderr}`);
-		assert.ok(!readdirSync(base).some(name => name.startsWith("book-print-release.")), "Temporary release files must be cleaned on success and failure");
+		assert.ok(!readdirSync(base).some(name => name.startsWith("bookbinder-release.")), "Temporary release files must be cleaned on success and failure");
 		const tag = spawnSync("git", ["--git-dir", remote, "rev-parse", "--verify", "refs/tags/1.2.4"], { env, encoding: "utf8" });
 		assert.equal(tag.status === 0, succeeds, `${scenario}: unexpected remote tag`);
 		assert.ok(!readFileSync(log, "utf8").includes("release create"), "The local script must leave artifact publication to CI");

@@ -6,7 +6,7 @@ import { loadFont, readProjectFile, saveProjectFile } from "../plugin/project-fi
 import { fontFamily, projectCss } from "../plugin/presentation.ts";
 import { parseProject } from "../plugin/project.ts";
 
-const directory = await mkdtemp(path.join(tmpdir(), "book-print-project-"));
+const directory = await mkdtemp(path.join(tmpdir(), "bookbinder-project-"));
 assert.equal(await readProjectFile(directory), undefined);
 const source = path.join(directory, "font.otf");
 await writeFile(source, "invalid font");
@@ -17,10 +17,10 @@ const data = { title: "Un projet", epub: { fonts: ["fonts/test.ttf"] }, custom: 
 const initial = JSON.stringify(data);
 await saveProjectFile(directory, initial, undefined, [font]);
 let saved = (await readProjectFile(directory))!;
-assert.equal(saved.name, "book-print.md");
+assert.equal(saved.name, "bookbinder.md");
 assert.equal(saved.yaml.trimEnd(), initial);
 assert.match(saved.content, /^---\n/);
-assert.match(saved.body, /\[Modifier le projet\]\(obsidian:\/\/book-print\)/);
+assert.match(saved.body, /\[Modifier le projet\]\(obsidian:\/\/bookbinder\)/);
 assert.deepEqual(await readFile(path.join(directory, "fonts/test.ttf")), Buffer.from(font.data));
 await assert.rejects(saveProjectFile(directory, "wrong", undefined, []), /modifié/);
 assert.deepEqual(await readProjectFile(directory), saved);
@@ -32,14 +32,14 @@ saved = (await readProjectFile(directory))!;
 assert.equal(JSON.parse(saved.yaml).custom.preserved, true);
 assert.equal(JSON.parse(saved.yaml).title, "Titre modifié");
 const body = saved.body + "\n## Notes personnelles\n\nCe texte reste modifiable.\n---\n";
-await writeFile(path.join(directory, "book-print.md"), `\uFEFF---\r\n${updated}\r\n---\r\n${body}`);
+await writeFile(path.join(directory, "bookbinder.md"), `\uFEFF---\r\n${updated}\r\n---\r\n${body}`);
 const handwritten = (await readProjectFile(directory))!;
 assert.equal(handwritten.body, body);
 await assert.rejects(saveProjectFile(directory, initial, saved, []), /modifié/);
 await saveProjectFile(directory, initial, handwritten, []);
 assert.equal((await readProjectFile(directory))!.body, body);
 const beforeBodyEdit = (await readProjectFile(directory))!;
-await writeFile(path.join(directory, "book-print.md"), beforeBodyEdit.content + "Autre modification\n");
+await writeFile(path.join(directory, "bookbinder.md"), beforeBodyEdit.content + "Autre modification\n");
 await assert.rejects(saveProjectFile(directory, updated, beforeBodyEdit, []), /modifié/);
 const legacy = path.join(directory, "legacy"); await mkdir(legacy);
 await writeFile(path.join(legacy, "book-print.yml"), initial);
@@ -47,24 +47,44 @@ const legacyFile = (await readProjectFile(legacy))!;
 assert.equal(legacyFile.name, "book-print.yml");
 await saveProjectFile(legacy, updated, legacyFile, []);
 assert.equal(await readFile(path.join(legacy, "book-print.yml"), "utf8"), initial);
-assert.equal((await readProjectFile(legacy))!.name, "book-print.md");
+assert.equal((await readProjectFile(legacy))!.name, "bookbinder.md");
 assert.equal(JSON.parse((await readProjectFile(legacy))!.yaml).title, "Titre modifié");
-assert.match((await readProjectFile(legacy))!.body, /obsidian:\/\/book-print/);
+assert.match((await readProjectFile(legacy))!.body, /obsidian:\/\/bookbinder/);
 await assert.rejects(saveProjectFile(legacy, initial, legacyFile, []), /modifié/);
+const oldMarkdown = path.join(directory, "old-markdown"); await mkdir(oldMarkdown);
+const oldBody = "\n[Modifier le projet](obsidian://book-print)\n\n## Notes personnelles\nÉté 漢字\n";
+const oldContent = `---\n${initial}\n---\n${oldBody}`;
+await writeFile(path.join(oldMarkdown, "book-print.md"), oldContent);
+await writeFile(path.join(oldMarkdown, "book-print.yml"), "title: Ancien YAML\n");
+const oldFile = (await readProjectFile(oldMarkdown))!;
+assert.equal(oldFile.name, "book-print.md");
+assert.equal(oldFile.yaml.trimEnd(), initial);
+await saveProjectFile(oldMarkdown, updated, oldFile, []);
+const renamed = (await readProjectFile(oldMarkdown))!;
+assert.equal(renamed.name, "bookbinder.md");
+assert.equal(renamed.body, oldBody);
+assert.equal(JSON.parse(renamed.yaml).title, "Titre modifié");
+assert.equal(await readFile(path.join(oldMarkdown, "book-print.md"), "utf8"), oldContent);
+await assert.rejects(saveProjectFile(oldMarkdown, initial, oldFile, []), /modifié/);
+const changedLegacy = path.join(directory, "changed-legacy"); await mkdir(changedLegacy);
+await writeFile(path.join(changedLegacy, "book-print.md"), oldContent);
+const legacySnapshot = (await readProjectFile(changedLegacy))!;
+await writeFile(path.join(changedLegacy, "book-print.md"), oldContent + "Modifié ailleurs\n");
+await assert.rejects(saveProjectFile(changedLegacy, updated, legacySnapshot, []), /modifié/);
 const malformed = path.join(directory, "malformed"); await mkdir(malformed);
 await writeFile(path.join(malformed, "book-print.yml"), initial);
 for (const content of ["# Sans propriétés\n", "---\ntitle: Sans fin\n", "Texte avant\n---\ntitle: Caché\n---\n"]) {
-	await writeFile(path.join(malformed, "book-print.md"), content);
+	await writeFile(path.join(malformed, "bookbinder.md"), content);
 	await assert.rejects(readProjectFile(malformed), /doit commencer/);
 }
-await writeFile(path.join(malformed, "book-print.md"), "---\n---\nTexte seul\n");
+await writeFile(path.join(malformed, "bookbinder.md"), "---\n---\nTexte seul\n");
 assert.equal((await readProjectFile(malformed))!.yaml, "");
 assert.equal((await readProjectFile(malformed))!.body, "Texte seul\n");
 for (const newline of ["\n", "\r\n"]) {
 	for (const prefix of ["", "\uFEFF"]) {
-		for (const text of ["", "## Notes\n\n---\nLien [projet](obsidian://book-print)\n", "Été 漢字 \u202eRTL\u202c\n```yaml\ntitle: Faux titre\n```\n"]) {
+		for (const text of ["", "## Notes\n\n---\nLien [projet](obsidian://bookbinder)\n", "Été 漢字 \u202eRTL\u202c\n```yaml\ntitle: Faux titre\n```\n"]) {
 			const properties = ["title: Un livre", "description: |", "  ---", "  Texte"].join(newline) + newline;
-			await writeFile(path.join(malformed, "book-print.md"), prefix + "---" + newline + properties + "---" + newline + text);
+			await writeFile(path.join(malformed, "bookbinder.md"), prefix + "---" + newline + properties + "---" + newline + text);
 			const parsed = (await readProjectFile(malformed))!;
 			assert.equal(parsed.yaml, properties);
 			assert.equal(parsed.body, text);
@@ -72,16 +92,17 @@ for (const newline of ["\n", "\r\n"]) {
 	}
 }
 const blocked = path.join(directory, "blocked"); await mkdir(blocked); await mkdir(path.join(blocked, "fonts"));
-await mkdir(path.join(blocked, "book-print.md"));
+await mkdir(path.join(blocked, "bookbinder.md"));
 await assert.rejects(saveProjectFile(blocked, "new", undefined, [font]));
-assert.equal((await readdir(blocked)).some(name => name.startsWith(".book-print-project-")), false);
-assert.ok(!(await readdir(directory)).some(name => name.startsWith(".book-print-project-")));
+assert.equal((await readdir(blocked)).some(name => name.startsWith(".bookbinder-project-")), false);
+assert.ok(!(await readdir(directory)).some(name => name.startsWith(".bookbinder-project-")));
 const project = parseProject({ epub: { fonts: ["fonts/L’étrange font.ttf"], style: { "font-family": fontFamily("L’étrange font.ttf") } } }, "Livre");
 const css = projectCss(project);
 assert.match(css, /@font-face/);
 assert.ok(css.includes(encodeURIComponent("L’étrange font.ttf")));
 assert.ok(css.includes(`font-family:${fontFamily("L’étrange font.ttf")}`));
 assert.notEqual(fontFamily("a-b.ttf"), fontFamily("ab.ttf"));
+assert.equal(fontFamily("a.ttf"), "BookPrint-61-2e-74-74-66");
 const paragraphs = projectCss(parseProject({ epub: { style: { "margin-top": "12pt", "text-indent": "10pt" } } }, "Livre"));
 assert.doesNotMatch(paragraphs.match(/body\{[^}]*\}/)![0], /margin-top|text-indent/);
 assert.match(paragraphs, /p\{margin-top:12pt;text-indent:10pt\}/);

@@ -3,7 +3,7 @@ import { access, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 export async function evaluateInChrome(expression, directory, screenshot) {
-	const chrome = process.env.BOOK_PRINT_CHROME || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+	const chrome = process.env.BOOKBINDER_CHROME || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 	await access(chrome);
 	const child = spawn(chrome, ["--headless=new", "--disable-gpu", "--no-first-run", "--remote-debugging-pipe", `--user-data-dir=${path.join(directory, "chrome")}`], { stdio: ["ignore", "ignore", "ignore", "pipe", "pipe"] });
 	const pending = new Map();

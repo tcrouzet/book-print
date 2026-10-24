@@ -1,5 +1,6 @@
 import { ButtonComponent, FileSystemAdapter, FileView, type TFile } from "obsidian";
 
+// Obsidian conserve cet identifiant dans les onglets déjà ouverts.
 export const EPUB_VIEW = "book-print-epub";
 
 export class EpubView extends FileView {

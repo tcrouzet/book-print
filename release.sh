@@ -27,7 +27,7 @@ fi
 git push -u origin "$BRANCH"
 [[ -z "$(git status --porcelain)" ]] || { printf 'Arbre git non propre\n' >&2; exit 1; }
 
-RELEASE_TMP=$(mktemp -d "${TMPDIR:-/tmp}/book-print-release.XXXXXX")
+RELEASE_TMP=$(mktemp -d "${TMPDIR:-/tmp}/bookbinder-release.XXXXXX")
 trap 'rm -rf -- "$RELEASE_TMP"' EXIT
 jq --arg v "$TAG" '.version = $v' manifest.json > "$RELEASE_TMP/manifest.json"
 mv -- "$RELEASE_TMP/manifest.json" manifest.json

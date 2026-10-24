@@ -58,14 +58,14 @@ class ProjectModal extends Modal {
 	}
 
 	onOpen(): void {
-		this.modalEl.addClass("book-print-project-modal");
+		this.modalEl.addClass("bookbinder-project-modal");
 		this.setTitle(this.original === undefined ? "Créer un projet de livre" : "Modifier le projet de livre");
-		this.contentEl.createDiv({ text: this.directory, cls: "book-print-project-path" });
-		const navigation = this.contentEl.createDiv({ cls: "book-print-project-tabs", attr: { role: "tablist", "aria-label": "Configuration du projet" } });
-		const layout = this.contentEl.createDiv({ cls: "book-print-project-layout" });
-		const information = layout.createDiv({ cls: "book-print-project-information" });
+		this.contentEl.createDiv({ text: this.directory, cls: "bookbinder-project-path" });
+		const navigation = this.contentEl.createDiv({ cls: "bookbinder-project-tabs", attr: { role: "tablist", "aria-label": "Configuration du projet" } });
+		const layout = this.contentEl.createDiv({ cls: "bookbinder-project-layout" });
+		const information = layout.createDiv({ cls: "bookbinder-project-information" });
 		const formats = ["pdf", "docx", "epub"] as const;
-		const formatPanels = formats.map(() => layout.createDiv({ cls: "book-print-project-format" }));
+		const formatPanels = formats.map(() => layout.createDiv({ cls: "bookbinder-project-format" }));
 		this.panels = [information, ...formatPanels];
 		this.selectPanel = mountProjectTabs(navigation, this.panels, ["Généralités", "PDF", "DOCX", "ePub"], () => {
 			layout.scrollTop = 0;
@@ -87,15 +87,15 @@ class ProjectModal extends Modal {
 		cover.createEl("summary", { text: "Couverture" });
 		this.image(cover, "cover", "Couverture", "Automatique");
 		this.image(cover, "cover-background", "Image de fond", "Sans image de fond");
-		const fonts = information.createDiv({ cls: "book-print-fonts" });
+		const fonts = information.createDiv({ cls: "bookbinder-fonts" });
 		fonts.createEl("h3", { text: "Polices" });
-		const fontList = fonts.createDiv({ cls: "book-print-font-list" });
+		const fontList = fonts.createDiv({ cls: "bookbinder-font-list" });
 		let fontBusy = true;
 		const showFonts = () => {
 			fontList.empty();
-			if (!this.project.fonts.length) fontList.createDiv({ text: "Polices par défaut (Auto)", cls: "book-print-muted" });
+			if (!this.project.fonts.length) fontList.createDiv({ text: "Polices par défaut (Auto)", cls: "bookbinder-muted" });
 			for (const filename of this.project.fonts) {
-				const row = fontList.createDiv({ cls: "book-print-font-row" });
+				const row = fontList.createDiv({ cls: "bookbinder-font-row" });
 				row.createSpan({ text: filename.split(/[/\\]/).pop() });
 				new ButtonComponent(row).setButtonText("Retirer").setDisabled(fontBusy).setTooltip("Retirer du projet sans supprimer le fichier").onClick(() => {
 					for (const editor of this.styleEditors) editor.removeFont(filename);
@@ -130,7 +130,7 @@ class ProjectModal extends Modal {
 				}
 			} finally { setFontBusy(false); }
 		}));
-		fonts.createEl("p", { text: "Les polices importées seront enregistrées dans le dossier fonts du projet et proposées dans la barre de mise en forme.", cls: "book-print-muted" });
+		fonts.createEl("p", { text: "Les polices importées seront enregistrées dans le dossier fonts du projet et proposées dans la barre de mise en forme.", cls: "bookbinder-muted" });
 		const epub = formatPanels[2].createEl("details");
 		epub.createEl("summary", { text: "Sommaire et fichiers de style" });
 		for (const [key, label] of [["tocDepth", "Profondeur du sommaire"], ["splitLevel", "Niveau de découpage"]] as const) {
@@ -170,15 +170,15 @@ class ProjectModal extends Modal {
 		}
 		for (const [index, format] of formats.entries()) {
 			const panel = formatPanels[index];
-			const tabs = panel.createDiv({ cls: "book-print-project-tabs", attr: { "aria-label": "Réglages " + format.toUpperCase() } });
+			const tabs = panel.createDiv({ cls: "bookbinder-project-tabs", attr: { "aria-label": "Réglages " + format.toUpperCase() } });
 			panel.prepend(tabs);
-			const page = panel.createDiv({ cls: "book-print-project-page" });
-			const presentation = panel.createDiv({ cls: "book-print-project-presentation" });
+			const page = panel.createDiv({ cls: "bookbinder-project-page" });
+			const presentation = panel.createDiv({ cls: "bookbinder-project-presentation" });
 			page.createEl("h3", { text: "Page" });
 			page.createEl("p", { text: format === "epub"
 				? "Le format d’un EPUB s’adapte à l’écran de la liseuse. Les marges sont exprimées en em. Auto conserve les valeurs du modèle."
-				: "Auto conserve les marges du modèle ; les valeurs saisies ici sont exprimées en millimètres.", cls: "book-print-muted" });
-			const pageFields = page.createDiv({ cls: "book-print-page-fields" });
+				: "Auto conserve les marges du modèle ; les valeurs saisies ici sont exprimées en millimètres.", cls: "bookbinder-muted" });
+			const pageFields = page.createDiv({ cls: "bookbinder-page-fields" });
 			presentation.createEl("h3", { text: "Styles" });
 			const editor = new StyleEditor(presentation, this.projects[format], this.baseCss, () => this.markDirty(), () => this.close(), { format, setIcon });
 			this.editors.set(format, editor);
@@ -186,9 +186,9 @@ class ProjectModal extends Modal {
 			const panels = [page, presentation];
 			const labels = ["Page", "Styles"];
 			if (format === "epub") {
-				const rules = panel.createDiv({ cls: "book-print-project-presentation" });
+				const rules = panel.createDiv({ cls: "bookbinder-project-presentation" });
 				rules.createEl("h3", { text: "Règles" });
-				rules.createEl("p", { text: "Premiers paragraphes après un titre et lettrine du modèle après un titre 2.", cls: "book-print-muted" });
+				rules.createEl("p", { text: "Premiers paragraphes après un titre et lettrine du modèle après un titre 2.", cls: "bookbinder-muted" });
 				this.ruleEditor = new StyleEditor(rules, this.project, this.baseCss, () => this.markDirty(), () => this.close(), { format, setIcon, rules: true });
 				panels.push(rules); labels.push("Règles");
 			}
@@ -196,8 +196,8 @@ class ProjectModal extends Modal {
 			this.nestedTabs.push({ panels, select });
 		}
 		this.editor = this.editors.get("epub");
-		this.error = this.contentEl.createDiv({ cls: "book-print-project-error", attr: { role: "alert", "aria-live": "polite" } });
-		const footer = this.contentEl.createDiv({ cls: "book-print-project-actions" });
+		this.error = this.contentEl.createDiv({ cls: "bookbinder-project-error", attr: { role: "alert", "aria-live": "polite" } });
+		const footer = this.contentEl.createDiv({ cls: "bookbinder-project-actions" });
 		this.cancelButton = new ButtonComponent(footer).setButtonText("Annuler").onClick(() => this.close());
 		this.saveButton = new ButtonComponent(footer).setButtonText("Enregistrer le projet").setCta().onClick(() => this.action(() => this.save()));
 		void this.action(async () => {
@@ -322,7 +322,7 @@ class ProjectModal extends Modal {
 		try {
 			await saveProjectFile(this.directory, stringifyYaml(data), this.original, Array.from(this.pendingFonts.values()));
 			this.dirty = false;
-			new Notice(`Projet enregistré : ${path.join(this.directory, "book-print.md")}`);
+			new Notice(`Projet enregistré : ${path.join(this.directory, "bookbinder.md")}`);
 		} finally {
 			this.saving = false;
 			this.saveButton?.setButtonText("Enregistrer le projet");

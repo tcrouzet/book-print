@@ -34,4 +34,4 @@ fusion:
   noteSeparator: ''
 ---
 
-[Modifier le projet](obsidian://book-print)
+[Modifier le projet](obsidian://bookbinder)

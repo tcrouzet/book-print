@@ -1,16 +1,16 @@
 import { App, ButtonComponent, ExtraButtonComponent, FileSystemAdapter, PluginSettingTab, Setting, TextComponent, requestUrl } from "obsidian";
-import type BookPrintPlugin from "./main";
+import type BookbinderPlugin from "./main";
 import { detectTool, type Tool, type ToolStatus } from "./tools";
 import { checkUpdate } from "./updates";
-import type { BookPrintSettings } from "./types";
+import type { BookbinderSettings } from "./types";
 import { chooseOutputDirectory } from "./output";
 import { openProjectEditor } from "./project-modal";
 
-export class BookPrintSettingTab extends PluginSettingTab {
-	private draft: BookPrintSettings;
+export class BookbinderSettingTab extends PluginSettingTab {
+	private draft: BookbinderSettings;
 	private generation = 0;
 
-	constructor(app: App, private plugin: BookPrintPlugin) {
+	constructor(app: App, private plugin: BookbinderPlugin) {
 		super(app, plugin);
 		this.draft = { ...plugin.settings };
 	}
@@ -19,7 +19,7 @@ export class BookPrintSettingTab extends PluginSettingTab {
 		this.generation++;
 		this.draft = { ...this.plugin.settings };
 		this.containerEl.empty();
-		this.containerEl.addClass("book-print-settings");
+		this.containerEl.addClass("bookbinder-settings");
 		this.displayProjects();
 		this.displayOutputDirectory();
 		new Setting(this.containerEl).setName("Installation").setHeading()
@@ -34,7 +34,7 @@ export class BookPrintSettingTab extends PluginSettingTab {
 			statuses[tool.key] = setting.descEl.createDiv({ attr: { role: "status", "aria-live": "polite" } });
 		}
 
-		const advanced = this.containerEl.createEl("details", { cls: "book-print-paths" });
+		const advanced = this.containerEl.createEl("details", { cls: "bookbinder-paths" });
 		advanced.createEl("summary", { text: "Chemins personnalisés" });
 		advanced.createEl("p", { text: "Laissez ces champs vides pour utiliser la détection automatique." });
 		for (const [key, label] of [["pandocPath", "Pandoc"], ["latexPath", "XeLaTeX"]] as const) {
@@ -142,7 +142,7 @@ export class BookPrintSettingTab extends PluginSettingTab {
 	private async showStatus(element: HTMLElement, status: ToolStatus, tool: Tool, generation: number): Promise<void> {
 		element.empty();
 		element.createDiv({ text: status.state === "found" ? `Détecté · ${status.version}` : status.message });
-		if (status.path) element.createDiv({ text: status.path, cls: "book-print-tool-path" });
+		if (status.path) element.createDiv({ text: status.path, cls: "bookbinder-tool-path" });
 		const update = element.createDiv({ text: "Recherche de la version en ligne…" });
 		const result = await checkUpdate(tool, status, async url => {
 			const response = await requestUrl({ url, throw: false });

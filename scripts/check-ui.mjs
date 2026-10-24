@@ -9,14 +9,14 @@ import { build } from "esbuild";
 import { evaluateInChrome } from "./browser-check.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
-const directory = await mkdtemp(path.join(tmpdir(), "book-print-ui-"));
+const directory = await mkdtemp(path.join(tmpdir(), "bookbinder-ui-"));
 await build({
 	stdin: { contents: 'export * from "./plugin/project.ts"; export * from "./plugin/project-files.ts"; export * from "./plugin/epub.ts"; export * from "./plugin/presentation.ts"; export * from "./plugin/tools.ts"; export { resources } from "./scripts/resources.ts";', resolveDir: root },
 	bundle: true, platform: "node", format: "cjs", outfile: path.join(directory, "core.cjs"),
 	loader: { ".lua": "text", ".latex": "text", ".css": "text" },
 });
 const { parseProject, loadFont, saveProjectFile, readProjectFile, exportEpub, detectTool, resources, fontFamily } = createRequire(import.meta.url)(path.join(directory, "core.cjs"));
-const fontPath = process.env.BOOK_PRINT_TEST_FONT || "/System/Library/Fonts/Supplemental/Times New Roman.ttf";
+const fontPath = process.env.BOOKBINDER_TEST_FONT || "/System/Library/Fonts/Supplemental/Times New Roman.ttf";
 const font = await loadFont(fontPath);
 const browser = await build({
 	stdin: { contents: 'export { StyleEditor } from "./plugin/style-editor.ts"; export { mountProjectTabs } from "./plugin/project-tabs.ts"; export { renderCover } from "./plugin/cover.ts"; export { fontFamily } from "./plugin/presentation.ts"; export { linkProjectNote } from "./plugin/project-view.ts";', resolveDir: root },
@@ -26,34 +26,40 @@ const styles = await readFile(path.join(root, "styles.css"), "utf8");
 const check = async assets => {
 	const assert = (condition, message) => { if (!condition) throw new Error(message); };
 	const note = document.createElement("div");
-	note.innerHTML = '<a href="obsidian://book-print">Modifier le projet</a><a href="https://example.org">Autre lien</a>';
-	BookUI.linkProjectNote(note, "Livres/L’été & nous/book-print.md", "Mon coffre");
+	note.innerHTML = '<a href="obsidian://bookbinder">Modifier le projet</a><a href="https://example.org">Autre lien</a>';
+	BookUI.linkProjectNote(note, "Livres/L’été & nous/bookbinder.md", "Mon coffre");
 	const projectLink = new URL(note.querySelector("a").href);
-	assert(projectLink.protocol === "obsidian:" && projectLink.hostname === "book-print", "Lien d’ouverture du projet");
-	assert(projectLink.searchParams.get("file") === "Livres/L’été & nous/book-print.md" && projectLink.searchParams.get("vault") === "Mon coffre", "Chemin et coffre du projet rendu");
+	assert(projectLink.protocol === "obsidian:" && projectLink.hostname === "bookbinder", "Lien d’ouverture du projet");
+	assert(projectLink.searchParams.get("file") === "Livres/L’été & nous/bookbinder.md" && projectLink.searchParams.get("vault") === "Mon coffre", "Chemin et coffre du projet rendu");
 	assert(note.querySelectorAll("a")[1].getAttribute("href") === "https://example.org", "Autres liens préservés");
-	const normalNote = document.createElement("div"); normalNote.innerHTML = '<a href="obsidian://book-print">Modifier</a>';
+	const legacyNote = document.createElement("div"); legacyNote.innerHTML = '<a href="obsidian://book-print">Modifier</a>';
+	BookUI.linkProjectNote(legacyNote, "Livres/book-print.md", "Mon coffre");
+	const legacyLink = new URL(legacyNote.querySelector("a").href);
+	assert(legacyLink.hostname === "bookbinder" && legacyLink.searchParams.get("file") === "Livres/book-print.md", "Ancien lien et ancienne note de projet compatibles");
+	const normalNote = document.createElement("div"); normalNote.innerHTML = '<a href="obsidian://bookbinder">Modifier</a>';
 	BookUI.linkProjectNote(normalNote, "chapitre.md", "Mon coffre");
-	assert(normalNote.querySelector("a").getAttribute("href") === "obsidian://book-print", "Seule la note de projet est transformée");
+	assert(normalNote.querySelector("a").getAttribute("href") === "obsidian://bookbinder", "Seule la note de projet est transformée");
 	const explorer = document.createElement("div"); explorer.className = "nav-files-container";
-	explorer.innerHTML = '<div class="nav-file-title" data-path="Livres/book-print.md"><span class="nav-file-title-content">book-print.md</span></div>';
+	explorer.innerHTML = '<div class="nav-file-title" data-path="Livres/bookbinder.md"><span class="nav-file-title-content">bookbinder.md</span></div>';
 	document.body.append(explorer);
 	const style = document.createElement("style");
-	style.textContent = assets.styles + "body{font:16px/1.5 sans-serif;margin:24px}h1{font-size:24px}.book-print-project-presentation{max-width:1000px}";
+	style.textContent = assets.styles + "body{font:16px/1.5 sans-serif;margin:24px}h1{font-size:24px}.bookbinder-project-presentation{max-width:1000px}";
 	document.head.append(style);
 	const tokens = { "--text-accent": "#6d28d9", "--text-muted": "#666", "--background-secondary": "#f3f3f3", "--background-modifier-border": "#ccc", "--interactive-accent": "#6d28d9", "--text-on-accent": "white", "--font-small": "13px", "--size-4-1": "4px", "--size-4-2": "8px", "--size-4-3": "12px", "--size-4-4": "16px", "--size-4-6": "24px", "--radius-m": "8px" };
 	for (const [name, value] of Object.entries(tokens)) document.documentElement.style.setProperty(name, value);
 	assert(getComputedStyle(explorer.querySelector("span")).color === "rgb(109, 40, 217)", "Projet Markdown dans la couleur d’accentuation");
+	explorer.querySelector(".nav-file-title").dataset.path = "Livres/book-print.md";
+	assert(getComputedStyle(explorer.querySelector("span")).color === "rgb(109, 40, 217)", "Ancienne note de projet dans la couleur d’accentuation");
 	explorer.remove();
 	const title = document.createElement("h1"); title.textContent = "Présentation du livre"; document.body.append(title);
-	const host = document.createElement("section"); host.className = "book-print-project-modal"; host.style.width = "800px"; host.style.height = "760px"; document.body.append(host);
-	const navigation = document.createElement("div"); navigation.className = "book-print-project-tabs"; host.append(navigation);
-	const layout = document.createElement("div"); layout.className = "book-print-project-layout"; host.append(layout);
-	const panels = ["book-print-project-information", "book-print-project-format", "book-print-project-format", "book-print-project-format"].map(name => { const panel = document.createElement("div"); panel.className = name; layout.append(panel); return panel; });
+	const host = document.createElement("section"); host.className = "bookbinder-project-modal"; host.style.width = "800px"; host.style.height = "760px"; document.body.append(host);
+	const navigation = document.createElement("div"); navigation.className = "bookbinder-project-tabs"; host.append(navigation);
+	const layout = document.createElement("div"); layout.className = "bookbinder-project-layout"; host.append(layout);
+	const panels = ["bookbinder-project-information", "bookbinder-project-format", "bookbinder-project-format", "bookbinder-project-format"].map(name => { const panel = document.createElement("div"); panel.className = name; layout.append(panel); return panel; });
 	panels[0].textContent = "Généralités du livre";
 	const formatPanels = panels.slice(1).map((panel, index) => {
-		const tabs = document.createElement("div"); tabs.className = "book-print-project-tabs"; panel.append(tabs);
-		const children = ["book-print-project-page", "book-print-project-presentation", ...(index === 2 ? ["book-print-project-presentation"] : [])].map(name => { const child = document.createElement("div"); child.className = name; panel.append(child); return child; });
+		const tabs = document.createElement("div"); tabs.className = "bookbinder-project-tabs"; panel.append(tabs);
+		const children = ["bookbinder-project-page", "bookbinder-project-presentation", ...(index === 2 ? ["bookbinder-project-presentation"] : [])].map(name => { const child = document.createElement("div"); child.className = name; panel.append(child); return child; });
 		return { tabs, children };
 	});
 	const epubPanel = panels[3];
@@ -102,26 +108,26 @@ const check = async assets => {
 	const field = name => {
 		const element = fieldScope.querySelector('[aria-label="' + name + '"]');
 		assert(element, "Champ absent : " + name);
-		const panel = element.closest(".book-print-inspector-panel");
-		if (panel?.hidden) element.closest(".book-print-toolbar").querySelector('[aria-controls="' + panel.id + '"]').click();
+		const panel = element.closest(".bookbinder-inspector-panel");
+		if (panel?.hidden) element.closest(".bookbinder-toolbar").querySelector('[aria-controls="' + panel.id + '"]').click();
 		assert(element.getClientRects().length, "Champ masqué : " + name); return element;
 	};
 	const change = (name, value, event = "change") => { const element = field(name); element.value = value; element.dispatchEvent(new Event(event, { bubbles: true })); };
 	const frame = container.querySelector("iframe");
 	const computed = selector => frame.contentWindow.getComputedStyle(frame.contentDocument.querySelector(selector));
 	assert(Array.from(container.querySelectorAll("input")).every(element => element.checkValidity()), "Valeurs initiales invalides");
-	let inspectorTabs = container.querySelectorAll('.book-print-inspector-tabs [role="tab"]');
+	let inspectorTabs = container.querySelectorAll('.bookbinder-inspector-tabs [role="tab"]');
 	assert(Array.from(inspectorTabs, tab => tab.textContent).join("|") === "Caractère|Paragraphe|Enchaînement", "Catégories du panneau de styles");
 	inspectorTabs[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
 	assert(inspectorTabs[1].getAttribute("aria-selected") === "true" && document.activeElement === inspectorTabs[1], "Navigation clavier vers Paragraphe");
 	change("Style", "h3");
-	inspectorTabs = container.querySelectorAll('.book-print-inspector-tabs [role="tab"]');
+	inspectorTabs = container.querySelectorAll('.bookbinder-inspector-tabs [role="tab"]');
 	assert(inspectorTabs[1].getAttribute("aria-selected") === "true", "La catégorie est conservée quand on change de style");
-	assert(Array.from(container.querySelectorAll(".book-print-inspector-panel")).filter(panel => !panel.hidden).length === 1, "Une seule catégorie de réglages visible");
-	assert(container.querySelector(".book-print-toolbar").getBoundingClientRect().height < 340, "Le panneau de styles doit rester compact");
+	assert(Array.from(container.querySelectorAll(".bookbinder-inspector-panel")).filter(panel => !panel.hidden).length === 1, "Une seule catégorie de réglages visible");
+	assert(container.querySelector(".bookbinder-toolbar").getBoundingClientRect().height < 340, "Le panneau de styles doit rester compact");
 	change("Style", "p");
 	const invalidSize = field("Corps (em)"); invalidSize.value = "0";
-	container.querySelectorAll('.book-print-inspector-tabs [role="tab"]')[1].click();
+	container.querySelectorAll('.bookbinder-inspector-tabs [role="tab"]')[1].click();
 	assert(!invalidSize.getClientRects().length, "Le champ invalide doit être dans une catégorie masquée");
 	editor.revealField(invalidSize);
 	assert(invalidSize.getClientRects().length && !invalidSize.checkValidity(), "La validation révèle le champ sans le recréer ni effacer sa valeur");
@@ -134,7 +140,7 @@ const check = async assets => {
 	assert(field("Police").value === "" && field("Alignement automatique").getAttribute("aria-pressed") === "true", "Police et alignement en Auto");
 	change("Style", "h2");
 	change("Corps (em)", "1.75", "input");
-	assert(container.querySelector(".book-print-preview-heading span:last-child").textContent === "Titre 2", "L’aperçu indique le style sélectionné");
+	assert(container.querySelector(".bookbinder-preview-heading span:last-child").textContent === "Titre 2", "L’aperçu indique le style sélectionné");
 	assert(presentation.headings.h2["font-size"] === "1.75em", "Le corps du titre doit être conservé en em");
 	assert(Math.abs(parseFloat(computed("h2").fontSize) - 28) < 0.1, "Le corps du titre doit apparaître dans l’aperçu");
 	const bold = field("Gras"); assert(bold.getAttribute("aria-pressed") === "mixed", "Le gras doit être en Auto"); bold.focus(); bold.click();
@@ -198,7 +204,7 @@ const check = async assets => {
 	frame.contentDocument.documentElement.style.removeProperty("font-size");
 	const paragraph = frame.contentDocument.querySelector("p"); paragraph.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
 	assert(field("Style").value === "p", "Sélection du style au clavier");
-	assert(container.querySelector(".book-print-preview-heading span:last-child").textContent === "Texte courant", "L’aperçu suit la sélection dans le texte");
+	assert(container.querySelector(".bookbinder-preview-heading span:last-child").textContent === "Texte courant", "L’aperçu suit la sélection dans le texte");
 	paragraph.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
 	assert(closeRequested === 1, "Échap doit atteindre la fenêtre depuis l’aperçu");
 	for (const selector of styleChoices) {
@@ -233,28 +239,28 @@ const check = async assets => {
 	legacy.dispose(); legacyContainer.remove();
 	change("Style", "h2");
 	for (const element of container.querySelectorAll("input,select")) assert(element.getAttribute("aria-label") || element.labels?.length, "Contrôle sans nom accessible");
-	container.querySelectorAll('.book-print-inspector-tabs [role="tab"]')[0].click();
+	container.querySelectorAll('.bookbinder-inspector-tabs [role="tab"]')[0].click();
 	document.documentElement.style.setProperty("--background-secondary", "#292929");
 	document.documentElement.style.setProperty("--text-muted", "#b8b8b8");
 	document.documentElement.style.setProperty("--text-accent", "#bca8ff");
 	document.documentElement.style.setProperty("--interactive-accent", "#7c3aed");
 	document.documentElement.style.setProperty("--background-modifier-border", "#555");
 	document.body.style.background = "#202020"; document.body.style.color = "#eee";
-	assert(getComputedStyle(container.querySelector(".book-print-toolbar")).backgroundColor === "rgb(41, 41, 41)", "La barre doit suivre le thème sombre");
+	assert(getComputedStyle(container.querySelector(".bookbinder-toolbar")).backgroundColor === "rgb(41, 41, 41)", "La barre doit suivre le thème sombre");
 	assert(changed > 5, "Les modifications doivent être signalées");
 	assert(Array.from(container.querySelectorAll("input")).every(element => element.checkValidity()), "Contrôle invalide après mise en forme");
 	host.style.width = "520px";
 	assert(Math.abs(host.getBoundingClientRect().width - 520) < 1, "La largeur de fenêtre doit pouvoir changer");
 	for (const width of [520, 420]) {
 		host.style.width = width + "px";
-		for (const tab of container.querySelectorAll('.book-print-inspector-tabs [role="tab"]')) {
+		for (const tab of container.querySelectorAll('.bookbinder-inspector-tabs [role="tab"]')) {
 			tab.click();
-			const panel = container.querySelector('.book-print-inspector-panel:not([hidden])');
+			const panel = container.querySelector('.bookbinder-inspector-panel:not([hidden])');
 			assert(panel.scrollWidth <= panel.clientWidth + 1, "Le panneau ne doit pas déborder à " + width + " px : " + tab.textContent);
 		}
 	}
 	host.style.width = "800px";
-	container.querySelectorAll('.book-print-inspector-tabs [role="tab"]')[0].click();
+	container.querySelectorAll('.bookbinder-inspector-tabs [role="tab"]')[0].click();
 	const cover = await BookUI.renderCover({ title: "Projet visuel", author: "Auteur", subtitle: "", footer: "Épreuve" });
 	let coverBinary = ""; for (const byte of cover) coverBinary += String.fromCharCode(byte);
 	return { presentation, pdf: otherEditors[0].presentation, docx: otherEditors[1].presentation, cover: btoa(coverBinary), changed };
@@ -267,8 +273,8 @@ await writeFile(path.join(projectDirectory, "cover.jpg"), Buffer.from(result.cov
 const data = { title: "Projet visuel", author: "Auteur", cover: "cover.jpg", epub: result.presentation, pdf: result.pdf, docx: result.docx, custom: { preserved: true } };
 await saveProjectFile(projectDirectory, JSON.stringify(data), undefined, [font]);
 const projectFile = await readProjectFile(projectDirectory);
-assert.equal(projectFile.name, "book-print.md");
-assert.match(projectFile.body, /obsidian:\/\/book-print/);
+assert.equal(projectFile.name, "bookbinder.md");
+assert.match(projectFile.body, /obsidian:\/\/bookbinder/);
 const saved = JSON.parse(projectFile.yaml);
 assert.equal(saved.epub.headings.h2["font-family"], fontFamily(font.name));
 assert.equal(saved.custom.preserved, true);

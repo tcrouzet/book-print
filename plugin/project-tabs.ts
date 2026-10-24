@@ -14,10 +14,10 @@ export function mountProjectTabs(navigation: HTMLElement, panels: HTMLElement[],
 	};
 	for (const [index, label] of labels.entries()) {
 		const button = navigation.ownerDocument.createElement("button"); button.type = "button"; button.textContent = label;
-		button.id = "book-print-tab-" + group + "-" + index;
+		button.id = "bookbinder-tab-" + group + "-" + index;
 		button.setAttribute("role", "tab");
-		panels[index].id = "book-print-panel-" + group + "-" + index;
-		panels[index].classList.add("book-print-project-panel");
+		panels[index].id = "bookbinder-panel-" + group + "-" + index;
+		panels[index].classList.add("bookbinder-project-panel");
 		panels[index].setAttribute("role", "tabpanel");
 		panels[index].setAttribute("aria-labelledby", button.id);
 		button.setAttribute("aria-controls", panels[index].id);
