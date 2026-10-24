@@ -1,0 +1,62 @@
+name: Release Obsidian plugin
+
+on:
+    push:
+        tags:
+            - '[0-9]*'
+
+permissions:
+    contents: read
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+            id-token: write
+            attestations: write
+        steps:
+            - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+              with:
+                  persist-credentials: false
+
+            - name: Use Node.js
+              uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+              with:
+                  node-version-file: '.nvmrc'
+                  cache: 'npm'
+
+            - name: Validate and build
+              env:
+                  RELEASE_TAG: ${{ github.ref_name }}
+              run: |
+                  set -euo pipefail
+                  bash -n release.sh
+                  shellcheck release.sh
+                  npm ci
+                  node -e 'const assert = require("node:assert/strict"); assert.match(process.env.RELEASE_TAG, /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/); assert.equal(process.env.RELEASE_TAG, require("./manifest.json").version); assert.equal(require("./package.json").version, process.env.RELEASE_TAG); assert.equal(require("./package-lock.json").version, process.env.RELEASE_TAG);'
+                  npm test
+                  npm run test:release
+                  npm run build
+                  node scripts/check-resources.mjs
+                  sha256sum main.js > "$RUNNER_TEMP/main.sha256"
+                  npm run build
+                  sha256sum --check "$RUNNER_TEMP/main.sha256"
+                  node -e 'const fs = require("node:fs"); const size = ["main.js", "manifest.json", "styles.css"].reduce((sum, file) => sum + fs.statSync(file).size, 0); if (size >= 5000000) throw new Error(`Release trop volumineuse : ${size}`);'
+
+            - name: Attest build provenance
+              uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+              with:
+                  subject-path: |
+                      main.js
+                      manifest.json
+                      styles.css
+
+            - name: Publish plugin
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  RELEASE_TAG: ${{ github.ref_name }}
+              run: |
+                  set -euo pipefail
+                  gh release create "$RELEASE_TAG" main.js manifest.json styles.css \
+                    --verify-tag --title "$RELEASE_TAG" --notes "Release $RELEASE_TAG"

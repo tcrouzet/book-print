@@ -1,0 +1,601 @@
+% Asynchrone latex template — adapté Garamond 3 LT Std 12/14pt, justif 95mm
+
+\documentclass[a5paper, 10pt, twoside]{book}
+
+% Packages nécessaires
+\usepackage{geometry}
+\usepackage{fontspec}
+\usepackage{setspace}
+\usepackage{xspace}
+\usepackage{xcolor}
+\usepackage{fancyhdr}
+\usepackage{etoolbox}
+\usepackage{hyperref}
+\usepackage{unicode-math}
+\usepackage{cleveref}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{subscript}
+\usepackage{emptypage}
+\usepackage{calc}
+\usepackage{float}
+\usepackage{lettrine}
+\usepackage{pifont}
+
+
+% Packages pour le formatage du code
+\usepackage{fancyvrb}
+\usepackage{fvextra}
+\usepackage{framed}
+
+% Césures
+\usepackage[french]{babel}
+% Améliore lisibilité
+\usepackage{microtype}
+% https://ctan.math.washington.edu/tex-archive/macros/latex/contrib/nowidow/nowidow.pdf
+\usepackage[all]{nowidow}
+
+
+% Simplification de la gestion des notes de bas de page
+\usepackage{endnotes}
+\let\footnote=\endnote
+
+
+% Typographie française impeccable
+% https://mirrors.mit.edu/CTAN/macros/latex/contrib/impnattypo/impnattypo-fr.pdf
+\usepackage[
+  hyphenation,    % Améliore les césures françaises
+  parindent,      % Gère les alinéas trop courts
+  lastparline,    % Évite les dernières lignes de paragraphe trop courtes
+  rivers = 4      % Évite les "rivières" de blanc dans le texte
+]{impnattypo}
+
+\usepackage{newunicodechar}
+\newfontfamily\macronsfont{Garamond Premier Pro}[Scale=MatchLowercase]
+\newunicodechar{ū}{{\macronsfont ū}}
+\newunicodechar{ī}{{\macronsfont ī}}
+
+% Configuration manuelle des aspects typographiques français
+\frenchbsetup{
+  IndentFirst=false,         % Ne pas indenter le premier paragraphe d'une section
+  FrenchFootnotes=false,     % Pas de notes de bas de page à la française 
+  AutoSpacePunctuation=true, % Espace automatique avant la ponctuation haute
+  ThinColonSpace=true,       % Espace fine avant les deux-points
+  og=«,                      % Guillemet ouvrant français
+  fg=»,                      % Guillemet fermant français
+  InnerGuillSingle=true,     % Guillemets simples à l'intérieur des guillemets doubles
+  ThinSpaceInFrenchNumbers=true,      % Espace fine dans les nombres
+  FrenchSuperscripts=true,
+  OriginalTypewriter=true,
+}
+
+% Éviter seulement les très mauvaises césures
+\exhyphenpenalty=10000
+\tolerance=1000
+\emergencystretch=3em
+
+% Définir les espaces inter-mots
+\spaceskip=0.35em plus 0.25em minus 0.15em % Contrôle précis de l'espace entre les mots
+
+% Configuration de la géométrie de la page
+\geometry{
+  a5paper,
+  inner=28mm,
+  outer=25mm,   % textwidth = 148-28-25 = 95mm
+  top=15mm,
+  bottom=27mm,  % +3mm pour ~3 lignes supplémentaires
+  footskip=12mm
+}
+
+% Configuration grille
+\newlength{\mylinespacing}
+\setlength{\mylinespacing}{14pt}
+\setlength{\topskip}{\mylinespacing}
+
+
+% Configuration des polices
+\defaultfontfeatures{Ligatures=TeX, Mapping=tex-text}
+\SetExtraKerning{encoding={*}, family={*}, series={*}, size={*}}{}
+% \setmainfont{Playfair Display}
+% \setsansfont{Playfair Display}
+\setmainfont{Garamond 3 LT Std}  % Regular/Italic/Bold/BoldItalic auto-détectés
+\setsansfont{Garamond 3 LT Std}  % idem corps
+% \setmainfont{FreightTextProBook-Regular}
+% \setsansfont{FreightTextProBook-Regular}
+\newfontfamily\titrefont{Garamond 3 LT Std} 
+
+% Définir la taille de police exacte/interlignage
+\makeatletter
+\renewcommand\normalsize{%
+   \@setfontsize\normalsize{12pt}{\mylinespacing}%
+   \abovedisplayskip 10\p@ \@plus2\p@ \@minus5\p@
+   \abovedisplayshortskip \z@ \@plus3\p@
+   \belowdisplayshortskip 6\p@ \@plus3\p@ \@minus3\p@
+   \belowdisplayskip \abovedisplayskip
+   \let\@listi\@listI}
+\makeatother
+
+\setlength{\parskip}{0pt}  % Supprime l'espace entre paragraphes
+\setlength{\parindent}{1.2em}  % Indentation des paragraphes
+
+
+% Configuration des en-têtes et pieds de page
+\pagestyle{fancy}
+\fancyhf{} % Efface tous les champs d'en-tête et de pied de page
+\fancyfoot[LE]{\sffamily\fontsize{9pt}{9pt}\selectfont\thepage} % Page à gauche sur les pages paires
+\fancyfoot[RO]{\sffamily\fontsize{9pt}{9pt}\selectfont\thepage} % Page à droite sur les pages impaires
+\renewcommand{\headrulewidth}{0pt} % Pas de ligne d'en-tête
+\renewcommand{\footrulewidth}{0pt} % Pas de ligne de pied de page
+
+
+% S'assurer que le style plain (utilisé pour les premières pages de chapitre) est cohérent
+\fancypagestyle{plain}{
+    \fancyhf{} % Efface tous les champs
+    \fancyfoot[LE]{\sffamily\fontsize{9pt}{9pt}\selectfont\thepage} % Page à gauche sur les pages paires
+    \fancyfoot[RO]{\sffamily\fontsize{9pt}{9pt}\selectfont\thepage} % Page à droite sur les pages impaires
+    \renewcommand{\headrulewidth}{0pt}
+    \renewcommand{\footrulewidth}{0pt}
+}
+
+
+% H1 (chapter) — page de droite seule, centré, petites capitales, non gras
+%   baseline à 70mm du haut de page (top margin=15mm → \vspace*{55mm})
+%   positionne \iffirstsection=true pour que le H2 suivant aille en page de droite
+\newif\iffirstsection
+\firstsectionfalse
+\makeatletter
+\newcounter{chaptercount}
+\setcounter{chaptercount}{0}
+\renewcommand{\chapter}[1]{%
+  \stepcounter{chaptercount}%
+  \cleardoublepage
+  \thispagestyle{empty}%
+  \null\vskip-\topskip%
+  \vspace*{55mm}%
+{\centering\fontsize{28}{28}\selectfont\mdseries #1\par}%
+  \global\firstsectiontrue%
+  \@afterheading%
+}%
+\makeatother
+
+
+
+% H2 (chapter) — page de droite seule, centré, petites capitales, non gras
+%   baseline à 70mm du haut de page (top margin=15mm → \vspace*{55mm})
+%   positionne \iffirstsection=true pour que le H2 suivant aille en page de droite
+
+\makeatletter
+\renewcommand{\section}[1]{%
+  \stepcounter{chaptercount}%
+  \cleardoublepage
+  \thispagestyle{empty}%
+  \null\vskip-\topskip%
+  \vspace*{55mm}%
+{\centering\fontsize{20}{28}\selectfont\scshape\mdseries #1\par}%
+\vspace{5\mylinespacing}%
+\global\firstsectiontrue%
+\@afterheading%
+\everypar{%
+  \par
+  \cleardoublepage
+  \vspace*{50mm}%
+  \everypar{\setbox\z@\lastbox\everypar{}}%
+}%
+}%
+\makeatother
+
+
+
+% H3 (section) — haut de page, aligné gauche, italique, 12pt
+%   premier H3 après un H1 : page de droite (\cleardoublepage)
+%   H3 suivants : nouvelle page indifféremment (\clearpage)
+%   corps du texte ~50mm sous la baseline du titre H2
+\makeatletter
+\newcounter{subsectioncount}
+\setcounter{subsectioncount}{0}
+\renewcommand{\subsection}[1]{%
+  \stepcounter{subsectioncount}%
+  \ifnum\value{subsectioncount}=1
+    \cleardoublepage%
+  \else
+    \iffirstsection
+      \cleardoublepage%
+      \global\firstsectionfalse%
+    \else
+      \clearpage%
+    \fi
+  \fi
+  \null\vskip-\topskip%
+  {\normalfont\normalsize\itshape\noindent #1\par}%
+  \vspace{50mm}%
+  \@afterheading%
+  \global\@afterindentfalse%
+}
+\makeatother
+
+% \renewcommand{\section}[1]{%
+%   \stepcounter{chaptercount}%
+%   \cleardoublepage
+%   \thispagestyle{empty}%
+%   \null\vskip-\topskip%
+%   \vspace*{55mm}%
+% {\centering\fontsize{20}{28}\selectfont\scshape\mdseries #1\par}%
+% \vspace{5\mylinespacing}%
+% \global\firstsectiontrue%
+% \@afterheading%
+% \ignorespaces\futurelet\@nexttoken\@sectionaftercheck%
+% }%
+% \makeatother
+
+
+% H4 - invisible, commence sur page impaire, non numéroté
+\let\oldsubsubsection\subsubsection
+\renewcommand{\subsubsection}[1]{%
+  \cleardoublepage% Force page impaire
+  \thispagestyle{empty}% Supprime numéro de page
+  \vspace*{10\mylinespacing}% 150pt d'espace depuis le haut (10 × 15pt = 150pt)
+  \phantom{#1}% Titre invisible mais structurellement présent
+  \par% Force un saut de ligne
+}
+
+% H5 (paragraph) - redéfinition manuelle
+\makeatletter
+\renewcommand{\paragraph}[1]{%
+  \par
+  \noindent\hfill%
+  \begin{minipage}{0.7\linewidth}
+    \normalsize #1%
+  \end{minipage}%
+  \@afterheading
+}
+\makeatother
+
+
+% H6 (subparagraph) - redéfinition manuelle
+\makeatletter
+\renewcommand{\subparagraph}[1]{%
+  \vspace{0.5\mylinespacing}%
+  {\normalsize\raggedleft #1\par}%
+  \vspace{1.5\mylinespacing}%
+  \@afterheading%
+}
+\makeatother
+
+
+% Lettrines
+\setcounter{DefaultLines}{1}
+\renewcommand{\LettrineFont}{\titrefont\bfseries\scshape\MakeUppercase}
+\renewcommand{\LettrineTextFont}{\normalfont}
+
+
+% Quote alignée à droite avec espacement cohérent (sans double espace en série)
+\makeatletter
+\renewenvironment{quote}{%
+    \par\addvspace{\mylinespacing}% espace avant (fusionne si déjà présent)
+    \bgroup
+        \itshape
+        \parindent=0pt
+        \leftskip=\dimexpr\parindent+1em\relax
+        \rightskip=\leftskip
+        \par
+        \ignorespaces
+}{%
+        \par
+    \egroup
+    \addvspace{\mylinespacing}% espace après (fusionne si un autre suit)
+    \ignorespacesafterend
+}
+\makeatother
+
+
+% Définir spacer
+\newcommand{\starrule}{%
+  \par
+  \vspace{\baselineskip}
+  {\centering
+    \selectfont\ding{72}
+    \par
+  }%
+  \vspace{\baselineskip}
+  \par
+}
+
+% Définir alignright
+\newcommand{\alignright}[1]{%
+  \par
+  \vspace{\baselineskip}
+  {\raggedleft
+    #1
+    \par
+  }%
+  \vspace{\baselineskip}
+  \par
+}
+
+% Blochquote après H3
+\makeatletter
+\newcommand{\chapexergue}[1]{%
+    \par % S'assure que le paragraphe précédent est terminé et que nous sommes sur une nouvelle ligne.
+    \bgroup % Démarre un groupe local pour que les réglages soient temporaires.
+        \itshape % Met le texte en italique.
+        \leftskip=25mm % Définit la marge gauche pour toutes les lignes du paragraphe.
+        \rightskip=0pt % S'assure qu'il n'y a pas de marge droite supplémentaire (par défaut est 0).
+        \parindent=0pt
+        \sloppy
+        #1\par % Le contenu de l'exergue, suivi d'une fin de paragraphe.
+    \egroup % Termine le groupe local pour réinitialiser les marges et le style.
+}
+\makeatother
+
+
+% Bloquote book exergue après H4
+\makeatletter
+\newcommand{\bookexergue}[1]{%
+    % \par\vspace*{\mylinespacing}% % Espace vertical avant
+    \bgroup % Démarre un groupe local pour les réglages
+        \itshape % Met le texte en italique
+        \parindent=0pt % Pas d'indentation de première ligne interne
+        \leftskip=\dimexpr\parindent+7em\relax % Décale le bloc de 1 parindent depuis la marge gauche
+        \rightskip=\dimexpr\parindent\relax % Décale le bloc de 1 parindent depuis la marge droite
+        \obeylines
+        #1\par % Le contenu de l'exergue, suivi d'une fin de paragraphe
+    \egroup % Termine le groupe local
+}
+\makeatother
+
+% % Personnalisation des notes de fin
+% \renewcommand{\notesname}{Notes}
+
+% % Pour les notes de fin (endnotes)
+% \makeatletter
+% \renewcommand\enoteformat{%
+%   \rightskip\z@
+%   \leftskip\z@
+%   \parindent=1em
+%   \fontsize{8pt}{9.5pt}\selectfont % Taille explicite en points
+%   \leavevmode\llap{\makeenmark}%
+% }
+% \makeatother
+
+% Personnalisation des notes de fin avec titre formaté comme H2
+% \makeatletter
+% \renewcommand{\enoteheading}{%
+%   {\Large\sffamily\bfseries\raggedright Notes\par}%
+%   \vspace{\baselineskip}% Ajouter un espace après le titre
+% }
+
+% Forcer des puces (•) au lieu des tirets cadratins pour les listes
+\AtBeginDocument{%
+  \renewcommand{\labelitemi}{\textbullet}%
+  \renewcommand{\labelitemii}{\textbullet}%
+  \renewcommand{\labelitemiii}{\textbullet}%
+  \renewcommand{\labelitemiv}{\textbullet}%
+}
+
+% Espace avant la première puce et après la dernière d'une liste
+\AtBeginDocument{%
+  \let\oldpandocitemize\itemize
+  \let\endoldpandocitemize\enditemize
+  \renewenvironment{itemize}{%
+    \vspace{\mylinespacing}%
+    \oldpandocitemize
+  }{%
+    \endoldpandocitemize
+    \vspace{\mylinespacing}%
+  }%
+}
+
+
+% Conserver votre format pour le contenu des notes
+\renewcommand\enoteformat{%
+  \rightskip\z@
+  \leftskip\z@
+  \parindent=1em
+  \fontsize{8pt}{9.5pt}\selectfont % Taille explicite en points
+  \leavevmode\llap{\makeenmark}%
+}
+\makeatother
+
+% Images sans légende
+\newcommand{\pandocbounded}[1]{%
+  \begin{center}
+    \sbox0{#1}%
+    \ifdim\ht0>\textheight
+      \resizebox*{\textwidth}{!}{#1}%
+    \else
+      #1%
+    \fi
+  \end{center}
+}
+
+% Désactiver la numérotation des titres
+\setcounter{secnumdepth}{0}
+
+% Styles pour les liens
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  filecolor=magenta,
+  urlcolor=cyan,
+}
+
+% Configuration des blocs de code
+\fvset{
+  % samepage=true,
+  frame=none,
+  framesep=0pt,
+  fontsize=\fontsize{9pt}{\mylinespacing}\selectfont,
+  baselinestretch=1
+}
+
+% Pour les blocs Highlighting (pandoc)
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{
+  commandchars=\\\{\},
+  samepage=false,
+  frame=none,
+  framesep=0pt,
+  fontsize=\fontsize{9pt}{\mylinespacing}\selectfont,
+  baselinestretch=1,
+  mathescape=false,
+  breaklines=true,
+  breaksymbolleft=,
+  breaksymbolright=,
+  breakanywhere=true
+}
+
+% Pour les listes "compactes" générées par Pandoc
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}%
+  \setlength{\parskip}{0pt}%
+}
+
+% Définitions pour la coloration syntaxique (tout en noir)
+% \newenvironment{Shaded}{}{}
+
+\newenvironment{Shaded}{%
+  \par
+}{%
+  \par
+}
+
+\newcommand{\KeywordTok}[1]{\textbf{#1}}
+\newcommand{\DataTypeTok}[1]{#1}
+\newcommand{\DecValTok}[1]{#1}
+\newcommand{\BaseNTok}[1]{#1}
+\newcommand{\FloatTok}[1]{#1}
+\newcommand{\ConstantTok}[1]{#1}
+\newcommand{\CharTok}[1]{#1}
+\newcommand{\SpecialCharTok}[1]{#1}
+\newcommand{\StringTok}[1]{#1}
+\newcommand{\VerbatimStringTok}[1]{#1}
+\newcommand{\SpecialStringTok}[1]{#1}
+\newcommand{\ImportTok}[1]{#1}
+\newcommand{\CommentTok}[1]{\textit{#1}}
+\newcommand{\DocumentationTok}[1]{\textit{#1}}
+\newcommand{\AnnotationTok}[1]{\textit{#1}}
+\newcommand{\CommentVarTok}[1]{\textit{#1}}
+\newcommand{\OtherTok}[1]{#1}
+\newcommand{\FunctionTok}[1]{#1}
+\newcommand{\VariableTok}[1]{#1}
+\newcommand{\ControlFlowTok}[1]{\textbf{#1}}
+\newcommand{\OperatorTok}[1]{\textbf{#1}}
+\newcommand{\BuiltInTok}[1]{#1}
+\newcommand{\ExtensionTok}[1]{#1}
+\newcommand{\PreprocessorTok}[1]{\textit{#1}}
+\newcommand{\AttributeTok}[1]{#1}
+\newcommand{\RegionMarkerTok}[1]{#1}
+\newcommand{\InformationTok}[1]{\textit{#1}}
+\newcommand{\WarningTok}[1]{\textit{#1}}
+\newcommand{\AlertTok}[1]{#1}
+\newcommand{\ErrorTok}[1]{\textbf{#1}}
+\newcommand{\NormalTok}[1]{#1}
+
+
+% Pour faire entrer ligne creuse (à utiliser en début et fin de paragraphes)
+\newcommand{\tightopen}{%
+  \par\begingroup
+  \spaceskip=0.33em plus 0.22em minus 0.14em
+  \xspaceskip=\spaceskip
+}
+\newcommand{\tightclose}{\par\endgroup}
+
+% Élargissement léger
+\newcommand{\wideropen}{%
+  \par\begingroup
+  % Base plus large que ton global (0.35em), avec un peu de flex
+  \spaceskip=0.37em plus 0.24em minus 0.12em
+  \xspaceskip=\spaceskip
+  \ignorespaces
+}
+\newcommand{\widerclose}{\unskip\par\endgroup}
+
+
+
+% Structure document
+\begin{document}
+
+% Page titre
+
+$if(title)$
+\title{$title$}
+$endif$
+
+$if(author)$
+\author{$author$}
+$endif$
+
+$if(date)$
+\date{$date$}
+$endif$
+
+$if(charcount)$
+\date{$charcount$}
+$endif$
+
+$if(subtitle)$
+\newcommand{\subtitle}{$subtitle$}
+$endif$
+
+$if(publisher)$
+\newcommand{\publisher}{$publisher$}
+$endif$
+
+$if(rights)$
+\newcommand{\rights}{$rights$}
+$endif$
+
+$if(charcount)$
+\newcommand{\charcount}{$charcount$K signes}
+$endif$
+
+% Page de titre personnalisée
+$if(title)$
+\begin{titlepage}
+    \centering
+    {\huge\bfseries $title$\par}
+    $if(subtitle)$
+    \vspace{0.5cm}
+    {\large $subtitle$\par}
+    $endif$
+    \vspace{2cm}
+    $if(author)$
+    {\large $author$\par}
+    $endif$
+    \vfill
+    $if(publisher)$
+    {\large $publisher$\par}
+    $endif$
+    \vspace{0.5cm}
+    $if(charcount)$
+    \vspace{0.5cm}
+    {\small \charcount\par}
+    $endif$
+    $if(date)$
+    \vspace{0.5cm}
+    {\small $date$\par}
+    $endif$
+    $if(rights)$
+    \vspace{0.5cm}
+    {\small $rights$\par}
+    $endif$
+\end{titlepage}
+$endif$
+
+$if(toc)$
+\tableofcontents
+$endif$
+
+% \vspace*{8\baselineskip}
+
+$body$
+
+% Afficher les notes à la fin du document
+\clearpage
+\begingroup
+\parindent 0pt
+\parskip 1ex
+\def\enotesize{\small}
+% \theendnotes
+\endgroup
+
+\end{document}

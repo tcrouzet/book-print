@@ -1,0 +1,26 @@
+{
+  "name": "book-print",
+  "version": "0.0.1",
+  "description": "Production de livres depuis Obsidian avec Pandoc et LaTeX",
+  "main": "main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node plugin/esbuild.config.mjs",
+    "build": "npm run typecheck && node plugin/esbuild.config.mjs production",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types scripts/check-tools.ts && node --experimental-strip-types scripts/check-project.ts && node --experimental-strip-types scripts/check-project-files.ts",
+    "test:epub": "node scripts/check-epub.mjs",
+    "test:ui": "node scripts/check-ui.mjs",
+    "test:release": "node --experimental-strip-types scripts/check-release.ts"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "20.19.43",
+    "esbuild": "0.25.5",
+    "obsidian": "1.14.4",
+    "typescript": "5.9.3"
+  }
+}

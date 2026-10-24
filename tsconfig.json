@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2021",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "lib": ["DOM", "DOM.Iterable", "ES2021"],
+    "types": ["node"],
+    "strict": true,
+    "isolatedModules": true,
+    "allowImportingTsExtensions": true,
+    "allowSyntheticDefaultImports": true
+  },
+  "include": ["main.ts", "plugin/**/*.ts", "scripts/**/*.ts"]
+}

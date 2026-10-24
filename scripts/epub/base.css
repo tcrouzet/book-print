@@ -1,0 +1,161 @@
+@page {margin: 1.2em;}
+
+@font-face {
+	font-family: 'TitleF';
+	font-weight: normal;
+	font-style: normal;
+	src: url('../fonts/AdamantSansPro-Light.otf') format('opentype');
+}
+
+@font-face {
+	font-family: 'TitleB';
+	font-weight: normal;
+	font-style: normal;
+	src: url('../fonts/AdamantSansPro-Bold.otf') format('opentype');
+}
+
+@font-face{
+	font-family: "RegularF";
+	font-style: normal;
+	font-weight: normal;
+	font-variant: normal;
+	src: url("../fonts/Adamant.otf") format('opentype');
+}
+
+body{margin:0;padding:0;font-family:'RegularF',serif;font-weight:normal}
+a,a:visited,a:link{text-decoration:none}
+
+h1, h2, h3, h4 {
+	page-break-before: always;
+    break-before: page;
+}
+
+p{
+	text-align:justify;
+	text-indent:1em;
+	margin:0;
+	line-height:1.2em;
+	hyphens: auto;
+    -webkit-hyphens: auto;
+    -ms-hyphens: auto;
+}
+
+
+h1, h2, h3, h4, h5, h6 {
+    font-family:'TitleB',Arial,Helvetica,san-serif;
+    hyphens: none;
+    -webkit-hyphens: none;
+    -ms-hyphens: none;
+	page-break-inside:avoid;
+}
+
+/* Partie */
+h1{
+    font-size:3em;padding:0;margin-bottom:0em;margin-top:3em;
+    margin-right:0em;
+    margin-left:0em;
+    text-indent:0em;
+    text-align:center;
+    font-style:normal;
+}
+
+/* Mois */
+h2{
+    font-size:2em;
+    padding:0;margin-bottom:0em;
+    margin-top:3em;
+    margin-right:0em;margin-left:0em;text-indent:0em;text-align:center;
+    font-style:normal;
+}
+
+/* Cover */
+h1.title{
+    font-size:2em;
+    margin-top: 2em;
+    margin-bottom: 2rem;
+}
+
+p.subtitle{
+    text-align: center;
+    text-indent: 0;
+    font-family:'TitleF',Arial,Helvetica,san-serif;
+    font-size:1.2em;
+    margin-top: 0;
+    margin-bottom: 4em;
+    font-style: italic;
+    hyphens: none;
+    -webkit-hyphens: none;
+    -ms-hyphens: none;
+}
+
+
+/* Date */
+h3{color:#888;
+    font-size:1.3em;
+    margin-bottom:1em;
+    margin-top:3em;margin-right:0em;margin-left:0em;text-indent:0em;text-align:center;font-style:normal;padding-left:0em;padding-right:0em;
+    padding-top:3em;
+}
+
+/* Exergue */
+h4{font-size:1.1em;
+    color: transparent;
+    font-weight:normal;
+    margin-bottom:2em;
+    margin-top:0em;
+    margin-right:0em;
+    margin-left:0em;
+    text-indent:0em;
+    text-align:center;
+    padding-left:0em;
+    padding-right:0em;
+    padding-top:0em;
+    font-style:italic
+}
+
+h5{text-align:center;margin-bottom:0em;margin-top:0em;margin-right:0em;margin-left:0em;font-weight:normal;font-style:italic;line-height:1.2em}
+
+h6{text-align:right;margin-bottom:2em;margin-top:0.5em;margin-right:0;margin-left:0;font-weight:normal;line-height:1.2em;font-size:100%}
+
+h1 + p {
+    text-indent: 0em;
+}
+
+.thin-space {
+    font-size: 0.7em;
+    display: inline;
+    white-space: nowrap;
+    letter-spacing: -0.1em;
+
+}
+
+.thin-space-before {
+    margin-left: 0.3em;
+}
+
+.thin-space-after {
+    margin-right: 0.3em;
+}
+
+blockquote{margin-left: 0;margin-right:0; margin-top:1rem;margin-bottom: 0rem;}
+blockquote p{margin-left: 0;margin-right:0; margin-top:1rem;margin-bottom: 1rem;text-indent:0em;font-style:italic;}
+
+p.author{text-align: center;text-indent: 0}
+p.date{text-align: center;text-indent: 0;font-size: 0.5rem;color: #888;}
+div.rights{text-align: center;text-indent: 0;margin-top: 1rem;}
+div.abstract{text-align: center;margin-top: 1rem;}
+div.abstract-title{font-weight:normal;text-indent: 0;}
+
+hr{width:25%;margin-top: 2rem;margin-bottom: 2rem;}
+
+p.tab{text-align: right;margin-bottom: 1em;margin-top: 0.25em;text-indent: 0;white-space:pre-wrap;tab-size:4;}
+.smallcaps{font-variant:small-caps;}
+
+h2 + p::first-letter {
+  font-weight: bold;
+  font-family:'TitleB';
+}
+h2 + p {
+    text-indent: 0;
+}
+
