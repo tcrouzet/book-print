@@ -1,6 +1,6 @@
 {
   "name": "book-print",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Production de livres depuis Obsidian avec Pandoc et LaTeX",
   "main": "main.js",
   "type": "module",
