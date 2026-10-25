@@ -1,4 +1,5 @@
-import { FileSystemAdapter, Notice, Plugin, TFile, TFolder, parseYaml } from "obsidian";
+import { setLocale, t } from "./i18n.ts";
+import { FileSystemAdapter, Notice, Plugin, TFile, TFolder, getLanguage, parseYaml } from "obsidian";
 import * as path from "node:path";
 import { BookbinderSettingTab } from "./settings-tab";
 import { DEFAULT_SETTINGS, parseSettings, type BookbinderSettings } from "./types";
@@ -12,25 +13,38 @@ import { EPUB_VIEW, EpubView } from "./epub-view";
 import { readProjectFile } from "./project-files";
 import { linkProjectNote } from "./project-view";
 import { openProjectEditor } from "./project-modal";
+import { confirmOverwrite } from "./dialogs";
+import { loadTranslationFiles } from "./locale-files.ts";
+import { fontCatalog } from "./font-catalog.ts";
 
 export default class BookbinderPlugin extends Plugin {
 	readonly resources = resources;
 	settings: BookbinderSettings = { ...DEFAULT_SETTINGS };
 	private exporting = false;
 
+	private get pluginDirectory(): string {
+		const adapter = this.app.vault.adapter;
+		if (!(adapter instanceof FileSystemAdapter)) throw new Error(t("projectsRequireObsidianOnDesktop"));
+		return adapter.getFullPath(this.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.manifest.id}`);
+	}
+	get fontDirectory(): string { return path.join(this.pluginDirectory, "data", "_fonts"); }
+	get fontPackageFile(): string { return path.join(this.pluginDirectory, "fonts", fontCatalog.archive.file); }
+
 	async onload(): Promise<void> {
+		setLocale(getLanguage());
+		for (const error of await loadTranslationFiles(path.join(this.pluginDirectory, "locales"))) new Notice(error);
 		this.settings = parseSettings(await this.loadData());
 		this.addSettingTab(new BookbinderSettingTab(this.app, this));
 		this.registerView(EPUB_VIEW, leaf => new EpubView(leaf));
 		try { this.registerExtensions(["epub"], EPUB_VIEW); }
-		catch (error) { console.debug("Bookbinder : l’association des EPUB n’a pas été modifiée.", error); }
+		catch (error) { console.debug(t("bookbinderTheEpubAssociationWasLeftUnchanged"), error); }
 		for (const protocol of ["bookbinder", "book-print"]) this.registerObsidianProtocolHandler(protocol, async parameters => {
 			try {
 				const file = parameters.file === undefined ? this.app.workspace.getActiveFile() : this.app.vault.getAbstractFileByPath(parameters.file);
-				if (!(file instanceof TFile) || !isProjectNote(file.path) || !file.parent) throw new Error("Ouvrez bookbinder.md pour modifier le projet.");
+				if (!(file instanceof TFile) || !isProjectNote(file.path) || !file.parent) throw new Error(t("openBookbinderMdToEditTheProject"));
 				const adapter = this.app.vault.adapter;
-				if (!(adapter instanceof FileSystemAdapter)) throw new Error("Les projets nécessitent Obsidian sur ordinateur.");
-				await openProjectEditor(this.app, adapter.getFullPath(file.parent.path), resources["epub/base.css"]);
+				if (!(adapter instanceof FileSystemAdapter)) throw new Error(t("projectsRequireObsidianOnDesktop"));
+				await openProjectEditor(this.app, adapter.getFullPath(file.parent.path), resources["epub/base.css"], this.fontDirectory);
 			} catch (error) { new Notice(error instanceof Error ? error.message : String(error)); }
 		});
 		this.registerMarkdownPostProcessor((element, context) => linkProjectNote(element, context.sourcePath, this.app.vault.getName()));
@@ -44,19 +58,19 @@ export default class BookbinderPlugin extends Plugin {
 	}
 
 	async generateEpub(source: TFile | TFolder): Promise<void> {
-		if (this.exporting) { new Notice("Un export Bookbinder est déjà en cours."); return; }
+		if (this.exporting) { new Notice(t("aBookbinderExportIsAlreadyRunning")); return; }
 		this.exporting = true;
-		const notice = new Notice("Préparation de l’ePub…", 0);
+		const notice = new Notice(t("preparingEpub"), 0);
 		try {
 			const adapter = this.app.vault.adapter;
-			if (!(adapter instanceof FileSystemAdapter)) throw new Error("La génération nécessite Obsidian sur ordinateur.");
+			if (!(adapter instanceof FileSystemAdapter)) throw new Error(t("exportRequiresObsidianOnDesktop"));
 			const folder = source instanceof TFolder ? source : source.parent;
-			if (!folder) throw new Error("Le dossier du manuscrit est introuvable.");
+			if (!folder) throw new Error(t("theManuscriptFolderCouldNotBeFound"));
 			const directory = adapter.getFullPath(folder.path);
 			const projectFile = await readProjectFile(directory);
 			let config: unknown;
 			try { config = projectFile === undefined ? undefined : parseYaml(projectFile.yaml); }
-			catch (error) { throw new Error(`${projectFile?.name ?? "Projet"} invalide : ${error instanceof Error ? error.message : String(error)}`); }
+			catch (error) { throw new Error(t("invalidFileError", { file: projectFile?.name ?? "Projet", error: error instanceof Error ? error.message : String(error) })); }
 			const name = source instanceof TFile ? source.basename : source.isRoot() ? this.app.vault.getName() : source.name;
 			const project = parseProject(config, name);
 			const files: TFile[] = [];
@@ -67,27 +81,27 @@ export default class BookbinderPlugin extends Plugin {
 			};
 			collect(source);
 			files.sort((left, right) => left.path.localeCompare(right.path));
-			if (!files.length) throw new Error("Aucun fichier Markdown à exporter dans ce dossier.");
+			if (!files.length) throw new Error(t("noMarkdownFilesToExportInThisFolder"));
 			const sources: BookSource[] = [];
 			for (const file of files) {
 				const content = await this.app.vault.read(file);
 				sources.push({ path: adapter.getFullPath(file.path), content });
 			}
 			const pandoc = await detectTool("pandoc", this.settings.pandocPath);
-			if (pandoc.state !== "found") throw new Error(`${pandoc.message} Ouvrez Réglages → Bookbinder.`);
-			if (compareVersions(pandoc.version, "3.1.1") === -1) throw new Error("L’export EPUB nécessite Pandoc 3.1.1 ou plus récent. Ouvrez Réglages → Bookbinder pour le mettre à jour.");
-			notice.setMessage("Génération de l’EPUB…");
-			const output = path.join(this.settings.outputDirectory || directory, `${name}.epub`);
-			await exportEpub({ project, sources, directory, output, pandoc: pandoc.path, resources, renderCover, resolveImage: (target, sourcePath) => {
+			if (pandoc.state !== "found") throw new Error(t("errorOpenSettingsBookbinder", { error: pandoc.message }));
+			if (compareVersions(pandoc.version, "3.1.1") === -1) throw new Error(t("pandocVersionRequired"));
+			notice.setMessage(t("generatingEpub"));
+			const output = path.join(this.settings.outputDirectory || directory, `${project.filename}.epub`);
+			const generated = await exportEpub({ project, sources, directory, output, pandoc: pandoc.path, resources, renderCover, confirmOverwrite, fontDirectory: this.fontDirectory, resolveImage: (target, sourcePath) => {
 				const vaultPath = path.relative(adapter.getBasePath(), sourcePath).split(path.sep).join("/");
 				const destination = this.app.metadataCache.getFirstLinkpathDest(target, vaultPath);
-				if (!destination) throw new Error(`Image introuvable dans ${vaultPath} : ${target}`);
-				if (destination.extension.toLowerCase() === "md") throw new Error(`L’inclusion de note ![[${target}]] dans ${vaultPath} n’est pas encore prise en charge.`);
+				if (!destination) throw new Error(t("imageNotFoundInSourceTarget", { source: vaultPath, target: target }));
+				if (destination.extension.toLowerCase() === "md") throw new Error(t("embeddingNoteTargetInSourceIsNotSupportedYet", { target: target, source: vaultPath }));
 				return adapter.getFullPath(destination.path);
 			} });
-			new Notice(`EPUB créé : ${output}`, 10000);
+			if (generated) new Notice(t("epubCreatedFilename", { filename: generated }), 10000);
 		} catch (error) {
-			new Notice(`Book to ePub : ${error instanceof Error ? error.message : String(error)}`, 15000);
+			new Notice(t("bookToEpubError", { error: error instanceof Error ? error.message : String(error) }), 15000);
 		} finally {
 			notice.hide();
 			this.exporting = false;
@@ -102,7 +116,7 @@ export default class BookbinderPlugin extends Plugin {
 
 	getOutputDirectory(source: TFile): string {
 		const adapter = this.app.vault.adapter;
-		if (!(adapter instanceof FileSystemAdapter)) throw new Error("La génération nécessite Obsidian sur ordinateur.");
+		if (!(adapter instanceof FileSystemAdapter)) throw new Error(t("exportRequiresObsidianOnDesktop"));
 		return resolveOutputDirectory(adapter.getFullPath(source.path), this.settings.outputDirectory);
 	}
 }

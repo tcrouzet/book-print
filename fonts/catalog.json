@@ -1,0 +1,1224 @@
+{
+  "version": 1,
+  "archive": {
+    "file": "bookbinder-fonts-v1.json.gz",
+    "url": "https://raw.githubusercontent.com/tcrouzet/bookbinder/main/fonts/bookbinder-fonts-v1.json.gz",
+    "size": 14371375,
+    "unpackedSize": 30918338,
+    "sha256": "45499103833bda797f5893d3962648cb923687d46454cafd742ed8875fdade6a"
+  },
+  "families": [
+    {
+      "id": "FiraSans",
+      "name": "Fira Sans",
+      "category": "corps",
+      "designer": "Carrois Apostrophe",
+      "source": "https://github.com/googlefonts/FiraGFVersion",
+      "license": "OFL-1.1",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/firasans/OFL.txt",
+      "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/firasans/METADATA.pb",
+      "usage": {
+        "en": "Humanist sans serif for clear captions, practical text and interface-like material. Suitable for headings and short passages on screens.",
+        "fr": "Sans sérif humaniste pour légendes, textes pratiques et éléments proches d’une interface. Convient aux titres et passages courts à l’écran."
+      },
+      "files": [
+        "FiraSans-Bold.otf",
+        "FiraSans-BoldItalic.otf",
+        "FiraSans-Italic.otf",
+        "FiraSans-Regular.otf"
+      ]
+    },
+    {
+      "id": "IBMPlexSans",
+      "name": "IBM Plex Sans",
+      "category": "corps",
+      "designer": "Mike Abbink, Bold Monday",
+      "source": "https://github.com/googlefonts/plex",
+      "license": "OFL-1.1",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/ibmplexsans/OFL.txt",
+      "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/ibmplexsans/METADATA.pb",
+      "usage": {
+        "en": "Structured sans serif for technical and documentary books, captions and tables. Pair with a serif face for longer passages if desired.",
+        "fr": "Sans sérif structurée pour ouvrages techniques et documentaires, légendes et tableaux. Peut accompagner une sérif dans les passages longs."
+      },
+      "files": [
+        "IBMPlexSans-Bold.otf",
+        "IBMPlexSans-BoldItalic.otf",
+        "IBMPlexSans-Italic.otf",
+        "IBMPlexSans-Regular.otf"
+      ]
+    },
+    {
+      "id": "Literata",
+      "name": "Literata",
+      "category": "corps",
+      "designer": "TypeTogether",
+      "source": "https://github.com/googlefonts/literata",
+      "license": "OFL-1.1",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/literata/OFL.txt",
+      "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/literata/METADATA.pb",
+      "usage": {
+        "en": "Designed for digital reading and long-form publishing. A candidate for book text when an embedded face is an intentional editorial choice.",
+        "fr": "Conçue pour la lecture numérique et les textes longs. Une candidate au corps de livre quand l’intégration d’une police est un choix éditorial volontaire."
+      },
+      "files": [
+        "Literata-Bold.otf",
+        "Literata-BoldItalic.otf",
+        "Literata-Italic.otf",
+        "Literata-Regular.otf"
+      ]
+    },
+    {
+      "id": "Lora",
+      "name": "Lora",
+      "category": "corps",
+      "designer": "Cyreal",
+      "source": "https://github.com/cyrealtype/Lora-Cyrillic",
+      "license": "OFL-1.1",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/lora/OFL.txt",
+      "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/lora/METADATA.pb",
+      "usage": {
+        "en": "Contemporary serif with calligraphic details, for literary text, essays and quotations. Also works for restrained chapter headings.",
+        "fr": "Sérif contemporaine aux détails calligraphiques, pour littérature, essais et citations. Convient aussi aux titres de chapitre sobres."
+      },
+      "files": [
+        "Lora-Bold.otf",
+        "Lora-BoldItalic.otf",
+        "Lora-Italic.otf",
+        "Lora-Regular.otf"
+      ]
+    },
+    {
+      "id": "NotoSans",
+      "name": "Noto Sans",
+      "category": "corps",
+      "designer": "Google",
+      "source": "https://github.com/notofonts/latin-greek-cyrillic",
+      "license": "OFL-1.1",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosans/OFL.txt",
+      "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosans/METADATA.pb",
+      "usage": {
+        "en": "Sans serif covering Latin, Greek and Cyrillic in this family. Useful for multilingual captions and documentary text; other writing systems require their own Noto families.",
+        "fr": "Sans sérif couvrant le latin, le grec et le cyrillique dans cette famille. Utile aux légendes et textes documentaires multilingues ; les autres écritures demandent leurs propres familles Noto."
+      },
+      "files": [
+        "NotoSans-Bold.otf",
+        "NotoSans-BoldItalic.otf",
+        "NotoSans-Italic.otf",
+        "NotoSans-Regular.otf"
+      ]
+    },
+    {
+      "id": "NotoSerif",
+      "name": "Noto Serif",
+      "category": "corps",
+      "designer": "Google",
+      "source": "https://github.com/notofonts/latin-greek-cyrillic",
+      "license": "OFL-1.1",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/notoserif/OFL.txt",
+      "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/notoserif/METADATA.pb",
+      "usage": {
+        "en": "Serif for Latin, Greek and Cyrillic text. Useful for multilingual publishing and a consistent reading texture alongside Noto Sans.",
+        "fr": "Sérif pour les textes latins, grecs et cyrilliques. Utile à l’édition multilingue et à une lecture homogène, en complément de Noto Sans."
+      },
+      "files": [
+        "NotoSerif-Bold.otf",
+        "NotoSerif-BoldItalic.otf",
+        "NotoSerif-Italic.otf",
+        "NotoSerif-Regular.otf"
+      ]
+    },
+    {
+      "id": "OpenSans",
+      "name": "Open Sans",
+      "category": "corps",
+      "designer": "Steve Matteson",
+      "source": "https://github.com/googlefonts/opensans",
+      "license": "OFL-1.1",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/opensans/OFL.txt",
+      "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/opensans/METADATA.pb",
+      "usage": {
+        "en": "Open, neutral humanist sans serif for short text, captions, tables and practical documents. The supplied version is licensed under OFL 1.1, not Apache 2.0.",
+        "fr": "Sans sérif humaniste ouverte et neutre pour textes courts, légendes, tableaux et documents pratiques. La version fournie est sous OFL 1.1, et non Apache 2.0."
+      },
+      "files": [
+        "OpenSans-Bold.otf",
+        "OpenSans-BoldItalic.otf",
+        "OpenSans-Italic.otf",
+        "OpenSans-Regular.otf"
+      ]
+    },
+    {
+      "id": "PTSans",
+      "name": "PT Sans",
+      "category": "corps",
+      "designer": "ParaType",
+      "source": "https://github.com/googlefonts/ptsans",
+      "license": "OFL-1.1",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/ptsans/OFL.txt",
+      "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/ptsans/METADATA.pb",
+      "usage": {
+        "en": "Sans serif with a strong Latin and Cyrillic publishing background. Useful for captions, tables, notes and practical text alongside PT Serif.",
+        "fr": "Sans sérif issue d’un projet éditorial latin et cyrillique. Utile aux légendes, tableaux, notes et textes pratiques, en complément de PT Serif."
+      },
+      "files": [
+        "PTSans-Bold.otf",
+        "PTSans-BoldItalic.otf",
+        "PTSans-Italic.otf",
+        "PTSans-Regular.otf"
+      ]
+    },
+    {
+      "id": "PTSerif",
+      "name": "PT Serif",
+      "category": "corps",
+      "designer": "ParaType",
+      "source": "https://github.com/googlefonts/ptserif",
+      "license": "OFL-1.1",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/ptserif/OFL.txt",
+      "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/ptserif/METADATA.pb",
+      "usage": {
+        "en": "Serif companion to PT Sans, for continuous text and multilingual books using Latin and Cyrillic. Also suitable for conventional chapter headings.",
+        "fr": "Compagne sérif de PT Sans, pour texte suivi et ouvrages multilingues latins et cyrilliques. Convient aussi aux titres de chapitre classiques."
+      },
+      "files": [
+        "PTSerif-Bold.otf",
+        "PTSerif-BoldItalic.otf",
+        "PTSerif-Italic.otf",
+        "PTSerif-Regular.otf"
+      ]
+    },
+    {
+      "id": "SourceSans3",
+      "name": "Source Sans 3",
+      "category": "corps",
+      "designer": "Paul D. Hunt",
+      "source": "https://github.com/adobe-fonts/source-sans",
+      "license": "OFL-1.1",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/sourcesans3/OFL.txt",
+      "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/sourcesans3/METADATA.pb",
+      "usage": {
+        "en": "Adobe’s humanist sans serif for clear information hierarchy, captions and tables. A natural companion to Source Serif 4.",
+        "fr": "Sans sérif humaniste d’Adobe pour hiérarchiser l’information, composer légendes et tableaux. Complément naturel de Source Serif 4."
+      },
+      "files": [
+        "SourceSans3-Bold.otf",
+        "SourceSans3-BoldItalic.otf",
+        "SourceSans3-Italic.otf",
+        "SourceSans3-Regular.otf"
+      ]
+    },
+    {
+      "id": "SourceSerif4",
+      "name": "Source Serif 4",
+      "category": "corps",
+      "designer": "Frank Grießhammer",
+      "source": "https://github.com/adobe-fonts/source-serif",
+      "license": "OFL-1.1",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/sourceserif4/OFL.txt",
+      "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/sourceserif4/METADATA.pb",
+      "usage": {
+        "en": "Transitional serif for sustained reading and editorial work. Pair with Source Sans 3 for captions and secondary information.",
+        "fr": "Sérif de transition pour lecture suivie et travail éditorial. Source Sans 3 peut l’accompagner dans les légendes et informations secondaires."
+      },
+      "files": [
+        "SourceSerif4-Bold.otf",
+        "SourceSerif4-BoldItalic.otf",
+        "SourceSerif4-Italic.otf",
+        "SourceSerif4-Regular.otf"
+      ]
+    },
+    {
+      "id": "Vollkorn",
+      "name": "Vollkorn",
+      "category": "corps",
+      "designer": "Friedrich Althausen",
+      "source": "https://github.com/FAlthausen/Vollkorn-Typeface",
+      "license": "OFL-1.1",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/vollkorn/OFL.txt",
+      "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/vollkorn/METADATA.pb",
+      "usage": {
+        "en": "A sturdy, dark-textured serif for everyday book typography, literary text and emphatic quotations. It can also give weight to chapter headings.",
+        "fr": "Sérif robuste au gris soutenu pour composition courante, textes littéraires et citations expressives. Elle donne aussi de la présence aux titres."
+      },
+      "files": [
+        "Vollkorn-Bold.otf",
+        "Vollkorn-BoldItalic.otf",
+        "Vollkorn-Italic.otf",
+        "Vollkorn-Regular.otf"
+      ]
+    },
+    {
+      "id": "NotoSansSymbols2",
+      "name": "Noto Sans Symbols 2",
+      "category": "symboles",
+      "designer": "Google",
+      "source": "https://github.com/notofonts/symbols",
+      "license": "OFL-1.1",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosanssymbols2/OFL.txt",
+      "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosanssymbols2/METADATA.pb",
+      "usage": {
+        "en": "Symbols and ornaments, not a body-text face. Verified examples in this file: ❦ ❧ ✦ ✧ ❖ ✳ ❋. The asterism ⁂ is not included in this particular file.",
+        "fr": "Symboles et ornements, sans vocation de police de texte. Exemples vérifiés dans ce fichier : ❦ ❧ ✦ ✧ ❖ ✳ ❋. L’astérisme ⁂ n’est pas présent dans ce fichier précis."
+      },
+      "files": [
+        "NotoSansSymbols2-Regular.otf"
+      ]
+    },
+    {
+      "id": "Alegreya",
+      "name": "Alegreya",
+      "category": "titres",
+      "designer": "Juan Pablo del Peral, HT Fonts",
+      "source": "https://github.com/huertatipografica/Alegreya",
+      "license": "OFL-1.1",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/alegreya/OFL.txt",
+      "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/alegreya/METADATA.pb",
+      "usage": {
+        "en": "Literary serif with a calligraphic rhythm. Classified with headings here, but also designed for long reading and suitable for body text.",
+        "fr": "Sérif littéraire au rythme calligraphique. Classée ici avec les titres, elle est aussi conçue pour la lecture longue et peut servir au corps."
+      },
+      "files": [
+        "Alegreya-Bold.otf",
+        "Alegreya-BoldItalic.otf",
+        "Alegreya-Italic.otf",
+        "Alegreya-Regular.otf"
+      ]
+    },
+    {
+      "id": "AlegreyaSC",
+      "name": "Alegreya SC",
+      "category": "titres",
+      "designer": "Juan Pablo del Peral, HT Fonts",
+      "source": "https://github.com/huertatipografica/Alegreya",
+      "license": "OFL-1.1",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/alegreyasc/OFL.txt",
+      "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/alegreyasc/METADATA.pb",
+      "usage": {
+        "en": "Small-cap companion to Alegreya, for short titles, running heads and restrained emphasis. Avoid long passages entirely in small caps.",
+        "fr": "Compagne en petites capitales d’Alegreya, pour titres courts, titres courants et mises en valeur discrètes. Éviter les longs passages entièrement en petites capitales."
+      },
+      "files": [
+        "AlegreyaSC-Bold.otf",
+        "AlegreyaSC-BoldItalic.otf",
+        "AlegreyaSC-Italic.otf",
+        "AlegreyaSC-Regular.otf"
+      ]
+    },
+    {
+      "id": "Cardo",
+      "name": "Cardo",
+      "category": "titres",
+      "designer": "David Perry",
+      "source": "https://github.com/googlefonts/CardoFont",
+      "license": "OFL-1.1",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/cardo/OFL.txt",
+      "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/cardo/METADATA.pb",
+      "usage": {
+        "en": "Old-style serif aimed at scholarly, classical and linguistic publishing. This lot includes Regular, Italic and Bold, but no Bold Italic file.",
+        "fr": "Sérif ancienne destinée à l’édition savante, classique et linguistique. Ce lot contient romain, italique et gras, mais aucun fichier gras italique."
+      },
+      "files": [
+        "Cardo-Bold.otf",
+        "Cardo-Italic.otf",
+        "Cardo-Regular.otf"
+      ]
+    },
+    {
+      "id": "CormorantGaramond",
+      "name": "Cormorant Garamond",
+      "category": "titres",
+      "designer": "Christian Thalmann",
+      "source": "https://github.com/CatharsisFonts/Cormorant",
+      "license": "OFL-1.1",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/cormorantgaramond/OFL.txt",
+      "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/cormorantgaramond/METADATA.pb",
+      "usage": {
+        "en": "Display serif with strong contrast and fine details. Prefer generous title sizes; test carefully before using it as small screen text.",
+        "fr": "Sérif de titrage à fort contraste et détails fins. Préférer des titres de bonne taille ; vérifier le rendu avant un emploi en petit corps à l’écran."
+      },
+      "files": [
+        "CormorantGaramond-Bold.otf",
+        "CormorantGaramond-BoldItalic.otf",
+        "CormorantGaramond-Italic.otf",
+        "CormorantGaramond-Regular.otf"
+      ]
+    },
+    {
+      "id": "CrimsonPro",
+      "name": "Crimson Pro",
+      "category": "titres",
+      "designer": "Jacques Le Bailly",
+      "source": "https://github.com/Fonthausen/CrimsonPro",
+      "license": "OFL-1.1",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/crimsonpro/OFL.txt",
+      "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/crimsonpro/METADATA.pb",
+      "usage": {
+        "en": "Contemporary Garamond-inspired serif for books and editorial text. Works for both chapter headings and longer passages.",
+        "fr": "Sérif contemporaine inspirée des Garamond, pour livres et textes éditoriaux. Convient aux titres de chapitre comme aux passages longs."
+      },
+      "files": [
+        "CrimsonPro-Bold.otf",
+        "CrimsonPro-BoldItalic.otf",
+        "CrimsonPro-Italic.otf",
+        "CrimsonPro-Regular.otf"
+      ]
+    },
+    {
+      "id": "EBGaramond",
+      "name": "EB Garamond",
+      "category": "titres",
+      "designer": "Georg Duffner, Octavio Pardo",
+      "source": "https://github.com/octaviopardo/EBGaramond12",
+      "license": "OFL-1.1",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/ebgaramond/OFL.txt",
+      "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/ebgaramond/METADATA.pb",
+      "usage": {
+        "en": "Revival of historical Garamond forms, for classical title pages and literary books. It can serve both headings and continuous text.",
+        "fr": "Reprise de formes historiques de Garamond, pour pages de titre classiques et ouvrages littéraires. Peut servir aux titres comme au texte suivi."
+      },
+      "files": [
+        "EBGaramond-Bold.otf",
+        "EBGaramond-BoldItalic.otf",
+        "EBGaramond-Italic.otf",
+        "EBGaramond-Regular.otf"
+      ]
+    },
+    {
+      "id": "GentiumBookPlus",
+      "name": "Gentium Book Plus",
+      "category": "titres",
+      "designer": "SIL International",
+      "source": "https://github.com/silnrsi/font-gentium",
+      "license": "OFL-1.1",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/gentiumbookplus/OFL.txt",
+      "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/gentiumbookplus/METADATA.pb",
+      "usage": {
+        "en": "Book-oriented serif with broad support for Latin, Greek and Cyrillic and scholarly diacritics. Useful for quotations, academic work and long text.",
+        "fr": "Sérif de lecture couvrant largement latin, grec, cyrillique et diacritiques savants. Utile aux citations, ouvrages universitaires et textes longs."
+      },
+      "files": [
+        "GentiumBookPlus-Bold.otf",
+        "GentiumBookPlus-BoldItalic.otf",
+        "GentiumBookPlus-Italic.otf",
+        "GentiumBookPlus-Regular.otf"
+      ]
+    },
+    {
+      "id": "PlayfairDisplay",
+      "name": "Playfair Display",
+      "category": "titres",
+      "designer": "Claus Eggers Sørensen",
+      "source": "https://github.com/clauseggers/Playfair",
+      "license": "OFL-1.1",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/playfairdisplay/OFL.txt",
+      "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/playfairdisplay/METADATA.pb",
+      "usage": {
+        "en": "High-contrast transitional display serif, suited to book titles and chapter openers. Prefer it for headings rather than dense small text.",
+        "fr": "Sérif de titrage de transition à fort contraste, pour titres de livres et ouvertures de chapitre. La réserver de préférence aux titres plutôt qu’au petit texte dense."
+      },
+      "files": [
+        "PlayfairDisplay-Bold.otf",
+        "PlayfairDisplay-BoldItalic.otf",
+        "PlayfairDisplay-Italic.otf",
+        "PlayfairDisplay-Regular.otf"
+      ]
+    },
+    {
+      "id": "Spectral",
+      "name": "Spectral",
+      "category": "titres",
+      "designer": "Production Type",
+      "source": "https://github.com/productiontype/Spectral",
+      "license": "OFL-1.1",
+      "licenseUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/spectral/OFL.txt",
+      "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/spectral/METADATA.pb",
+      "usage": {
+        "en": "Serif designed for Google Docs and Slides, for editorial text and clear hierarchy. Useful for chapter headings, quotations and continuous text.",
+        "fr": "Sérif conçue pour Google Docs et Slides, pour textes éditoriaux et hiérarchies claires. Utile aux titres de chapitre, citations et textes suivis."
+      },
+      "files": [
+        "Spectral-Bold.otf",
+        "Spectral-BoldItalic.otf",
+        "Spectral-Italic.otf",
+        "Spectral-Regular.otf"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "README.md",
+      "kind": "note",
+      "size": 2667,
+      "sha256": "058205a82dddd1ca9d69be86be5725b89b01f91e8c709ce42d218815ea949e67"
+    },
+    {
+      "path": "corps/FiraSans/FiraSans-Bold.otf",
+      "kind": "font",
+      "size": 335196,
+      "sha256": "976e1e657f3de7c99d7cd2a73cb0117819d8bdd57d1585bd4dd9309d737e1a17"
+    },
+    {
+      "path": "corps/FiraSans/FiraSans-BoldItalic.otf",
+      "kind": "font",
+      "size": 350000,
+      "sha256": "8f2157e90fe8075f84bd8ce403a5953957a51ac13150f9bb6f070252a86a6060"
+    },
+    {
+      "path": "corps/FiraSans/FiraSans-Italic.otf",
+      "kind": "font",
+      "size": 317120,
+      "sha256": "cf20d2a8e83bc0a1c3d3226825506e5e4c041ff53976f6828c9c332fd1d5d5a1"
+    },
+    {
+      "path": "corps/FiraSans/FiraSans-Regular.otf",
+      "kind": "font",
+      "size": 304540,
+      "sha256": "4bba8aaee7b8c1442c8b9b71ffb045fb5fbfd8726ecbdb2e0a449a6c2325005e"
+    },
+    {
+      "path": "corps/FiraSans/LICENSE.txt",
+      "kind": "note",
+      "size": 4370,
+      "sha256": "8f24842e9174beda18a556c2ae7d54f5dc444340c19a3a9ef77e23bca366adbd"
+    },
+    {
+      "path": "corps/FiraSans/README.md",
+      "kind": "note",
+      "size": 1747,
+      "sha256": "29f3768600a596ec002528ee7c3d0684bdc8612024d23dfb39ffb0388bf4e789"
+    },
+    {
+      "path": "corps/IBMPlexSans/IBMPlexSans-Bold.otf",
+      "kind": "font",
+      "size": 205220,
+      "sha256": "63e837a31496176bb421c7c3cd8cdd2ab1fdc40a08ccba9a711d34bc952050fa"
+    },
+    {
+      "path": "corps/IBMPlexSans/IBMPlexSans-BoldItalic.otf",
+      "kind": "font",
+      "size": 220136,
+      "sha256": "d34011fb60da7cdcb9b98189a54792bfd7587466f3f2edfb996f13961b5b4459"
+    },
+    {
+      "path": "corps/IBMPlexSans/IBMPlexSans-Italic.otf",
+      "kind": "font",
+      "size": 220108,
+      "sha256": "ff58581a64466feab4c75d98abdfb688111c0af562bb49dcbdfe09e247fabb09"
+    },
+    {
+      "path": "corps/IBMPlexSans/IBMPlexSans-Regular.otf",
+      "kind": "font",
+      "size": 205252,
+      "sha256": "faa3487fc939b9b74d27d5797caf13306e5f5582761d7a232bd16451411f290e"
+    },
+    {
+      "path": "corps/IBMPlexSans/LICENSE.txt",
+      "kind": "note",
+      "size": 4456,
+      "sha256": "7e6b2818edbd8f6a01ae80641cc8f16a51080d08fb4e532be3a0b6f74adb07da"
+    },
+    {
+      "path": "corps/IBMPlexSans/README.md",
+      "kind": "note",
+      "size": 1735,
+      "sha256": "95ab18e39719f9dd1608eebceea8a5a8079e41999c40a4ede4f547d1e9997d38"
+    },
+    {
+      "path": "corps/Literata/LICENSE.txt",
+      "kind": "note",
+      "size": 4389,
+      "sha256": "8742963604cd89dc81437811a850018fc03b2bfad686d7422c8235967c87614e"
+    },
+    {
+      "path": "corps/Literata/Literata-Bold.otf",
+      "kind": "font",
+      "size": 173948,
+      "sha256": "ec6d0a4a7ae3155c6c4751d58ec30b8f60c1932560b120467fd8593aa47c61f4"
+    },
+    {
+      "path": "corps/Literata/Literata-BoldItalic.otf",
+      "kind": "font",
+      "size": 169356,
+      "sha256": "d617593e43e13a726beb97c55d204b83b605e14063976dbd519f4666fc19e571"
+    },
+    {
+      "path": "corps/Literata/Literata-Italic.otf",
+      "kind": "font",
+      "size": 166072,
+      "sha256": "31f1768dd41a99a3d015acb03b7730959ae688bc8629eeee93fbd0bfcc1b558b"
+    },
+    {
+      "path": "corps/Literata/Literata-Regular.otf",
+      "kind": "font",
+      "size": 170668,
+      "sha256": "496a4843ff2ca62a34ab7d99b1a48763a2bfe3405dc9394de7bfbfb709420b3d"
+    },
+    {
+      "path": "corps/Literata/README.md",
+      "kind": "note",
+      "size": 1807,
+      "sha256": "d0ab9c3b027e1cdf0dc370b250fa743d9d87715cb184891d791e86adbcae5bb8"
+    },
+    {
+      "path": "corps/Lora/LICENSE.txt",
+      "kind": "note",
+      "size": 4423,
+      "sha256": "1d9a970809ac804b582a6ce7f0ebc4e7fefcbfd7ff6299cad35ee656a21be716"
+    },
+    {
+      "path": "corps/Lora/Lora-Bold.otf",
+      "kind": "font",
+      "size": 132124,
+      "sha256": "ecdfab792242a662b4d837eb2f8f6635d3ee6add40ddde1f31a7e541fc06b1ac"
+    },
+    {
+      "path": "corps/Lora/Lora-BoldItalic.otf",
+      "kind": "font",
+      "size": 138352,
+      "sha256": "a6c9e5ec7a20606af06dcf4a71605b0fc7082e9dce2f7eadc1cc5ece406aeb22"
+    },
+    {
+      "path": "corps/Lora/Lora-Italic.otf",
+      "kind": "font",
+      "size": 137328,
+      "sha256": "c83448762eddc5aa401eb655745352f17de510ad54d1506574bd2d4b29a50304"
+    },
+    {
+      "path": "corps/Lora/Lora-Regular.otf",
+      "kind": "font",
+      "size": 132188,
+      "sha256": "d759d947e3cdce71b1e430f3b927f28ebcf6acb8c65cfc5d9c08d35a0feaf972"
+    },
+    {
+      "path": "corps/Lora/README.md",
+      "kind": "note",
+      "size": 1735,
+      "sha256": "8cdeebadba3ed630fa9c2ce5b7e321af7b7fb8f03eb52898534617b5e4c111ca"
+    },
+    {
+      "path": "corps/NotoSans/LICENSE.txt",
+      "kind": "note",
+      "size": 4396,
+      "sha256": "cee9892f9f0cc8fe882c9e9537ee6a89621d86ee7ceaf70b02e2b2b1c25c061a"
+    },
+    {
+      "path": "corps/NotoSans/NotoSans-Bold.otf",
+      "kind": "font",
+      "size": 558012,
+      "sha256": "a1141db2818b2b380ff1fd44125cc05e3b4fd0611a0e379010416c18c84c77d4"
+    },
+    {
+      "path": "corps/NotoSans/NotoSans-BoldItalic.otf",
+      "kind": "font",
+      "size": 572252,
+      "sha256": "ed14776a63bdf6da44aa2070a487014a270553508bf9785d765a0fe7923a7bbb"
+    },
+    {
+      "path": "corps/NotoSans/NotoSans-Italic.otf",
+      "kind": "font",
+      "size": 570384,
+      "sha256": "92f19a36109543a9f98908f5dfa3a637973190b34fe6d6f200db437198630f52"
+    },
+    {
+      "path": "corps/NotoSans/NotoSans-Regular.otf",
+      "kind": "font",
+      "size": 556328,
+      "sha256": "36ea06493443828875e9f06e1ad1c31d0df1359282bec87a8f3ff36e20fd488d"
+    },
+    {
+      "path": "corps/NotoSans/README.md",
+      "kind": "note",
+      "size": 1788,
+      "sha256": "e59e1467c809af46e52b161c8a84c79f6bf395439f29437053ffa40fa7929a1e"
+    },
+    {
+      "path": "corps/NotoSerif/LICENSE.txt",
+      "kind": "note",
+      "size": 4396,
+      "sha256": "cee9892f9f0cc8fe882c9e9537ee6a89621d86ee7ceaf70b02e2b2b1c25c061a"
+    },
+    {
+      "path": "corps/NotoSerif/NotoSerif-Bold.otf",
+      "kind": "font",
+      "size": 445548,
+      "sha256": "ec2efa558c9424c24ad42d7155d42f74137a0019319eef1bd14d51b0731c96fb"
+    },
+    {
+      "path": "corps/NotoSerif/NotoSerif-BoldItalic.otf",
+      "kind": "font",
+      "size": 476596,
+      "sha256": "4ed5f9a5eca18b290c223782ab4f6fd83cbf43977c47ecd19d16437b267d37a3"
+    },
+    {
+      "path": "corps/NotoSerif/NotoSerif-Italic.otf",
+      "kind": "font",
+      "size": 476400,
+      "sha256": "407212f6a76949bb4fdb0a0086101bf43a7c1fa95ee29386104fb14422aeb908"
+    },
+    {
+      "path": "corps/NotoSerif/NotoSerif-Regular.otf",
+      "kind": "font",
+      "size": 444064,
+      "sha256": "19c8c1eed8d14fd8fbd79de639854db77cb3b8b5b24aa1bc5f118dc19ca8c779"
+    },
+    {
+      "path": "corps/NotoSerif/README.md",
+      "kind": "note",
+      "size": 1755,
+      "sha256": "8885c4212ebe05f42db2039bab575b13c3f36aa02f59a66a408e998f8c5d596a"
+    },
+    {
+      "path": "corps/OpenSans/LICENSE.txt",
+      "kind": "note",
+      "size": 4389,
+      "sha256": "fbbbcfef55318de350562559b671360de6d597112ecc5c73881b05092db89602"
+    },
+    {
+      "path": "corps/OpenSans/OpenSans-Bold.otf",
+      "kind": "font",
+      "size": 122132,
+      "sha256": "6632f5d64eee4e704fd4f4480a0c06802e03e07e9c662606fe90133402e4fd06"
+    },
+    {
+      "path": "corps/OpenSans/OpenSans-BoldItalic.otf",
+      "kind": "font",
+      "size": 127156,
+      "sha256": "1365ed362c68e953a0d43267e3dcd461584cc246cdf12860d098e3624717cbdf"
+    },
+    {
+      "path": "corps/OpenSans/OpenSans-Italic.otf",
+      "kind": "font",
+      "size": 127392,
+      "sha256": "b9867e6fd3655bfb950d14f18c7b6fe8d721c77031ce4079ad658e2e445946a2"
+    },
+    {
+      "path": "corps/OpenSans/OpenSans-Regular.otf",
+      "kind": "font",
+      "size": 122116,
+      "sha256": "9d5fb4b3df1a16374ec0f203fa96ac6f0b98148b6f35e125527efab16a74f4d9"
+    },
+    {
+      "path": "corps/OpenSans/README.md",
+      "kind": "note",
+      "size": 1765,
+      "sha256": "4487bf8045aa1e40a887791e446f84573a4040ae548c7ea407cda0763aea48a5"
+    },
+    {
+      "path": "corps/PTSans/LICENSE.txt",
+      "kind": "note",
+      "size": 4422,
+      "sha256": "ee633f3e777f9ddd3cc18984d74ccbe2d1a863276465b347d2aab925be9c58d9"
+    },
+    {
+      "path": "corps/PTSans/PTSans-Bold.otf",
+      "kind": "font",
+      "size": 275408,
+      "sha256": "ae74c1d194650713ef5a7990b827e03c5e4723d5e8161f763b628ffd557a1712"
+    },
+    {
+      "path": "corps/PTSans/PTSans-BoldItalic.otf",
+      "kind": "font",
+      "size": 197292,
+      "sha256": "9df8d5308366e0b70c544b281cc9d2a033047777809993573df913baa1751da4"
+    },
+    {
+      "path": "corps/PTSans/PTSans-Italic.otf",
+      "kind": "font",
+      "size": 257988,
+      "sha256": "b9639b4b7c17f4b54e259e4a0b4ff183c7b5c12f2cb36050090a3129c74fd07d"
+    },
+    {
+      "path": "corps/PTSans/PTSans-Regular.otf",
+      "kind": "font",
+      "size": 265676,
+      "sha256": "9cda7f9dd0704f84a3b0caab895b5f65e2c5409b27bd45f7382fcc312c0a33e3"
+    },
+    {
+      "path": "corps/PTSans/README.md",
+      "kind": "note",
+      "size": 1712,
+      "sha256": "cede23f23e83b317ecdd2114642696b707146710f9e1587153c8bdcb18c2196a"
+    },
+    {
+      "path": "corps/PTSerif/LICENSE.txt",
+      "kind": "note",
+      "size": 4434,
+      "sha256": "ddf311c28ddf5a5ad9747649837346b67bed9d356789c3072bb27dbce49e514d"
+    },
+    {
+      "path": "corps/PTSerif/PTSerif-Bold.otf",
+      "kind": "font",
+      "size": 183172,
+      "sha256": "1caf3cda48f5df11ad39bc7749a030af1a91126c7779eccf633dd1e14002656c"
+    },
+    {
+      "path": "corps/PTSerif/PTSerif-BoldItalic.otf",
+      "kind": "font",
+      "size": 180832,
+      "sha256": "f0927e2f16cd476d7c37a349705c9a08a9c3cb5b6760cbf95327cf4702aff212"
+    },
+    {
+      "path": "corps/PTSerif/PTSerif-Italic.otf",
+      "kind": "font",
+      "size": 219344,
+      "sha256": "0117313e7790fa9a06a4259c7bd419507cb069aecd3d6998255f54dfacb52085"
+    },
+    {
+      "path": "corps/PTSerif/PTSerif-Regular.otf",
+      "kind": "font",
+      "size": 202596,
+      "sha256": "3e726b32ae0d918f1a8398aa7f99b23d22ce92ce1d79b4e7b80028fac9040f72"
+    },
+    {
+      "path": "corps/PTSerif/README.md",
+      "kind": "note",
+      "size": 1726,
+      "sha256": "acfaa92a7823841e0a69931bb0ee80a15b65a9cf7513008b60f0dbd7e9a7ac29"
+    },
+    {
+      "path": "corps/SourceSans3/LICENSE.txt",
+      "kind": "note",
+      "size": 4579,
+      "sha256": "09746787287a289323b0ec3cff4d1a4a801331b82b7207c1e186f5d26619a392"
+    },
+    {
+      "path": "corps/SourceSans3/README.md",
+      "kind": "note",
+      "size": 1872,
+      "sha256": "7c7dd8f0a16a772089cba89ab71e0a4faaf93eeab0929c96cd4e45f93b30c844"
+    },
+    {
+      "path": "corps/SourceSans3/SourceSans3-Bold.otf",
+      "kind": "font",
+      "size": 234640,
+      "sha256": "94f60949eb6eaf3ce45a44d3779e243e9c87e5e3ca939f70ecfcc2ce8c38c882"
+    },
+    {
+      "path": "corps/SourceSans3/SourceSans3-BoldItalic.otf",
+      "kind": "font",
+      "size": 209356,
+      "sha256": "33cef6db36adffcc1820aa50d5ef7d30b1633feb4ba104ce3ffa2f23969c850a"
+    },
+    {
+      "path": "corps/SourceSans3/SourceSans3-Italic.otf",
+      "kind": "font",
+      "size": 209376,
+      "sha256": "a30b22bd0d4a2a5d784b0f7d0e31f3316c432cba9f6628cacc66184b46b53fb9"
+    },
+    {
+      "path": "corps/SourceSans3/SourceSans3-Regular.otf",
+      "kind": "font",
+      "size": 234708,
+      "sha256": "92e9ebd3d059a6a5366e1a5489a0a91f88a648c3f684d6759ae2e300333bbb01"
+    },
+    {
+      "path": "corps/SourceSerif4/LICENSE.txt",
+      "kind": "note",
+      "size": 4400,
+      "sha256": "5f94c3fd3a23131a417ab5a0c8452de57e70c3cfb9f604d88241f7065ebf9fd9"
+    },
+    {
+      "path": "corps/SourceSerif4/README.md",
+      "kind": "note",
+      "size": 1942,
+      "sha256": "8c1089b4177ae41e85d244eef7bb66b1e97ead47f2c6f09da2fc2682cc0dc674"
+    },
+    {
+      "path": "corps/SourceSerif4/SourceSerif4-Bold.otf",
+      "kind": "font",
+      "size": 194760,
+      "sha256": "05f73703d14bd90c65435eb2ba478bf076f9cacb5c157ef27f6888112dedc6d3"
+    },
+    {
+      "path": "corps/SourceSerif4/SourceSerif4-BoldItalic.otf",
+      "kind": "font",
+      "size": 183648,
+      "sha256": "6e52efbcf046534d991c8d7717b045c8c98d24a661ca641dff51448483ef1cc1"
+    },
+    {
+      "path": "corps/SourceSerif4/SourceSerif4-Italic.otf",
+      "kind": "font",
+      "size": 183552,
+      "sha256": "244c006dd1e4b6dadd3b337cb5f349e9c3f66dd776985c75252a087507a6aafd"
+    },
+    {
+      "path": "corps/SourceSerif4/SourceSerif4-Regular.otf",
+      "kind": "font",
+      "size": 194464,
+      "sha256": "c64987984b683d8542590c6a4f0ad49a9f9afcee8877d018caf6c0514d40ba42"
+    },
+    {
+      "path": "corps/Vollkorn/LICENSE.txt",
+      "kind": "note",
+      "size": 4489,
+      "sha256": "53f9c99fa3d47f7d632a42ee7bab4a834a60a744f6026d676c3a223cef2b2ef3"
+    },
+    {
+      "path": "corps/Vollkorn/README.md",
+      "kind": "note",
+      "size": 1771,
+      "sha256": "f976e11ddb018ad3c8b5d27ee96988c6589b06ab1d4665dfbcf588b1075437ce"
+    },
+    {
+      "path": "corps/Vollkorn/Vollkorn-Bold.otf",
+      "kind": "font",
+      "size": 231072,
+      "sha256": "061a36cbef52b77793fb3613b73cda25cf84445052920eb8abf3d913a996ffeb"
+    },
+    {
+      "path": "corps/Vollkorn/Vollkorn-BoldItalic.otf",
+      "kind": "font",
+      "size": 227548,
+      "sha256": "da36c47a15278fadc02618c3bcf53c21128b508612e35de7c8d156fdb0ba6586"
+    },
+    {
+      "path": "corps/Vollkorn/Vollkorn-Italic.otf",
+      "kind": "font",
+      "size": 225984,
+      "sha256": "0b457c70c6c7a6e16f10934210ea3b6d20c77315518f69aa6f1b792f57da797a"
+    },
+    {
+      "path": "corps/Vollkorn/Vollkorn-Regular.otf",
+      "kind": "font",
+      "size": 228856,
+      "sha256": "4d701847194e4939c90a16b68fa4da526b516546587b8202ff19e33e55856285"
+    },
+    {
+      "path": "symboles/NotoSansSymbols2/LICENSE.txt",
+      "kind": "note",
+      "size": 4383,
+      "sha256": "b118dd41337806a5d4797052c77caf3bd096aed783e5eb21b4d11154351e1ac0"
+    },
+    {
+      "path": "symboles/NotoSansSymbols2/NotoSansSymbols2-Regular.otf",
+      "kind": "font",
+      "size": 1227692,
+      "sha256": "48593c797f1e8c7acac6d60fbc59835f750b689b700e4fb84e158aa22df1ff4d"
+    },
+    {
+      "path": "symboles/NotoSansSymbols2/README.md",
+      "kind": "note",
+      "size": 1487,
+      "sha256": "16496d8de8886369bc3d37ecbd1b2fed79261641ed64830d94936e9fe074d87f"
+    },
+    {
+      "path": "titres/Alegreya/Alegreya-Bold.otf",
+      "kind": "font",
+      "size": 164508,
+      "sha256": "90c45c9e857f2ebe72801eb541cf02354dfe812bd09d08dda13f1208a286da7c"
+    },
+    {
+      "path": "titres/Alegreya/Alegreya-BoldItalic.otf",
+      "kind": "font",
+      "size": 163568,
+      "sha256": "fdc54b95285ba34c0f81f8c2f2c159cb763984085f864a9baf85346928c65ad0"
+    },
+    {
+      "path": "titres/Alegreya/Alegreya-Italic.otf",
+      "kind": "font",
+      "size": 160996,
+      "sha256": "19e120787ccce08da4ac92166481e2d7dfeb566fbafaa228d51514c06b79c30e"
+    },
+    {
+      "path": "titres/Alegreya/Alegreya-Regular.otf",
+      "kind": "font",
+      "size": 161856,
+      "sha256": "9fe51e9983e0067669435ff2cab67b31368709c8cd2d6b499ac2303c0a3d042e"
+    },
+    {
+      "path": "titres/Alegreya/LICENSE.txt",
+      "kind": "note",
+      "size": 4395,
+      "sha256": "f6f60d5d4cf4f4b1fc4e41353c897a2f5a16e6396c0cd8fa8bdfd2f4586a9a68"
+    },
+    {
+      "path": "titres/Alegreya/README.md",
+      "kind": "note",
+      "size": 1625,
+      "sha256": "493b0bcae5a80373ce7c02cdcf6941fb0772bf3cc23fc147860c1d0888c745fe"
+    },
+    {
+      "path": "titres/AlegreyaSC/AlegreyaSC-Bold.otf",
+      "kind": "font",
+      "size": 311132,
+      "sha256": "ccf37e9f81257dbbcc436937a1b8d9ad26508bcee7e49d973f6554d1795ba9af"
+    },
+    {
+      "path": "titres/AlegreyaSC/AlegreyaSC-BoldItalic.otf",
+      "kind": "font",
+      "size": 332320,
+      "sha256": "7e5353d9d4b42b3e066cd110f851016e65da7f97b28ab4eaba6bcc51c6b58bdb"
+    },
+    {
+      "path": "titres/AlegreyaSC/AlegreyaSC-Italic.otf",
+      "kind": "font",
+      "size": 305476,
+      "sha256": "9c776120474fc26dd75ef3c5b903611b156f7059629cb279787321fb30f5467b"
+    },
+    {
+      "path": "titres/AlegreyaSC/AlegreyaSC-Regular.otf",
+      "kind": "font",
+      "size": 302764,
+      "sha256": "52b4a46a3342550c44683294c9c28050f72d1f03f822a3d629d7b617203fbf42"
+    },
+    {
+      "path": "titres/AlegreyaSC/LICENSE.txt",
+      "kind": "note",
+      "size": 4395,
+      "sha256": "f6f60d5d4cf4f4b1fc4e41353c897a2f5a16e6396c0cd8fa8bdfd2f4586a9a68"
+    },
+    {
+      "path": "titres/AlegreyaSC/README.md",
+      "kind": "note",
+      "size": 1720,
+      "sha256": "5ea067c04a7abe4c21ac4863f153ad94f40ac1983a7fb8ef1bfdc8643693dba4"
+    },
+    {
+      "path": "titres/Cardo/Cardo-Bold.otf",
+      "kind": "font",
+      "size": 339964,
+      "sha256": "86e5cbf73d7a4d219110496882e2234e42c3202a7d0b0a17e6da0509fcba897a"
+    },
+    {
+      "path": "titres/Cardo/Cardo-Italic.otf",
+      "kind": "font",
+      "size": 252620,
+      "sha256": "aeeb8e57364273fe846ab4f9890fbfd1e2848cae02faed6486316ba50623b014"
+    },
+    {
+      "path": "titres/Cardo/Cardo-Regular.otf",
+      "kind": "font",
+      "size": 386300,
+      "sha256": "c4982f57e886da3ed299945e78a02f396334d50f7cce181fd37b2b22e4cd2910"
+    },
+    {
+      "path": "titres/Cardo/LICENSE.txt",
+      "kind": "note",
+      "size": 4372,
+      "sha256": "8e28b778b6e1a7ff9ca72f4dee2d53120aa2856dc1bfd0be44307e365b0e45bb"
+    },
+    {
+      "path": "titres/Cardo/README.md",
+      "kind": "note",
+      "size": 1492,
+      "sha256": "bf66e36c4d8525ee53ee8a80cba1d25d5285f8368f522c0b68f845e2a6a36ffd"
+    },
+    {
+      "path": "titres/CormorantGaramond/CormorantGaramond-Bold.otf",
+      "kind": "font",
+      "size": 289992,
+      "sha256": "a9383e063b2f6e15e8759099a2d7819decbfaed3d87ddbc25ad744cad11de38d"
+    },
+    {
+      "path": "titres/CormorantGaramond/CormorantGaramond-BoldItalic.otf",
+      "kind": "font",
+      "size": 293116,
+      "sha256": "ebb4855450dbb0dbea5ef9e87ea5a626942a13c04585d2aece82b804840d5331"
+    },
+    {
+      "path": "titres/CormorantGaramond/CormorantGaramond-Italic.otf",
+      "kind": "font",
+      "size": 293036,
+      "sha256": "5a6a5ae5de70002aa1a5e5985f8e6f6768cd73568e9aef201ff083b924f1c5ba"
+    },
+    {
+      "path": "titres/CormorantGaramond/CormorantGaramond-Regular.otf",
+      "kind": "font",
+      "size": 290236,
+      "sha256": "9f1e2c06fe909a432a3e8b1f36c820d5d7fd45211b0c37355f610b28cc3bc1f4"
+    },
+    {
+      "path": "titres/CormorantGaramond/LICENSE.txt",
+      "kind": "note",
+      "size": 4387,
+      "sha256": "60700d351cac4650c51f3f9db318d2a420f8b45052dba2715eb5fec41f0f6956"
+    },
+    {
+      "path": "titres/CormorantGaramond/README.md",
+      "kind": "note",
+      "size": 1674,
+      "sha256": "487eb0d75616224257bd23036e0c27463c70add6e408f619587de28fab1071f9"
+    },
+    {
+      "path": "titres/CrimsonPro/CrimsonPro-Bold.otf",
+      "kind": "font",
+      "size": 97804,
+      "sha256": "a739fff4d669a59306cf8509594e5db5189cf262335a45deb19d6f8920e0e951"
+    },
+    {
+      "path": "titres/CrimsonPro/CrimsonPro-BoldItalic.otf",
+      "kind": "font",
+      "size": 99552,
+      "sha256": "b0e56e495bf45defc275f35a1eefbe70cab7fb65ce1a60218289db14fa33fc85"
+    },
+    {
+      "path": "titres/CrimsonPro/CrimsonPro-Italic.otf",
+      "kind": "font",
+      "size": 98972,
+      "sha256": "c65abf965fcb17a435715b60c9dcb87315a2525eb7fd403d009593d6c8a80b91"
+    },
+    {
+      "path": "titres/CrimsonPro/CrimsonPro-Regular.otf",
+      "kind": "font",
+      "size": 97164,
+      "sha256": "7877ede11e43a41dfe6f3699366e70ee1a5dde76b723f56559136cf8ec9d0568"
+    },
+    {
+      "path": "titres/CrimsonPro/LICENSE.txt",
+      "kind": "note",
+      "size": 4393,
+      "sha256": "1820869bd5baa1c2d88fa87c89eea532cf9442d841008acab720654b7f82823d"
+    },
+    {
+      "path": "titres/CrimsonPro/README.md",
+      "kind": "note",
+      "size": 1606,
+      "sha256": "5c3aad8d59f37089e611c058c68958ecf1bb6956ad43ed860b20bfee87abb2e1"
+    },
+    {
+      "path": "titres/EBGaramond/EBGaramond-Bold.otf",
+      "kind": "font",
+      "size": 392040,
+      "sha256": "384e353fea27fac26ab49d14b1780ed73bf09df708f949569847b27de37d391e"
+    },
+    {
+      "path": "titres/EBGaramond/EBGaramond-BoldItalic.otf",
+      "kind": "font",
+      "size": 341916,
+      "sha256": "519067d6bd4f204f96630788f3fc427fbcd5d2c9392b90c334af0d66cdd54f83"
+    },
+    {
+      "path": "titres/EBGaramond/EBGaramond-Italic.otf",
+      "kind": "font",
+      "size": 339240,
+      "sha256": "c887d957a066ab6570c83fdec9b2e2bec345b1830e397a0883d98e4780a4dd76"
+    },
+    {
+      "path": "titres/EBGaramond/EBGaramond-Regular.otf",
+      "kind": "font",
+      "size": 389868,
+      "sha256": "28fc48f3f4621a1cf6a675f1d6efde16a206ab7e2880a9d5b05d612d2068b0f6"
+    },
+    {
+      "path": "titres/EBGaramond/LICENSE.txt",
+      "kind": "note",
+      "size": 4398,
+      "sha256": "0985066662eb755ed3683ae5482a81a9195b49ce3f7e165cc2388b3dbece7dd7"
+    },
+    {
+      "path": "titres/EBGaramond/README.md",
+      "kind": "note",
+      "size": 1637,
+      "sha256": "46fe4fae397b5f65e9adccce327d5237ad41f44789f48f2f6dc88674a968675a"
+    },
+    {
+      "path": "titres/GentiumBookPlus/GentiumBookPlus-Bold.otf",
+      "kind": "font",
+      "size": 590960,
+      "sha256": "0d2013170f8a7bc83883c809e7467e6bcc44ef806577c361326c7a2360b71d25"
+    },
+    {
+      "path": "titres/GentiumBookPlus/GentiumBookPlus-BoldItalic.otf",
+      "kind": "font",
+      "size": 636544,
+      "sha256": "99dd1f2eded775e97fdddadb7eddf0964eb942321421c6dcd764c8e3d1d567ff"
+    },
+    {
+      "path": "titres/GentiumBookPlus/GentiumBookPlus-Italic.otf",
+      "kind": "font",
+      "size": 630104,
+      "sha256": "04e9d2a20e5c7e81baa9b5b76cd48412221a3a87dae8f63bccea6b4cb1a2c459"
+    },
+    {
+      "path": "titres/GentiumBookPlus/GentiumBookPlus-Regular.otf",
+      "kind": "font",
+      "size": 579728,
+      "sha256": "b1c7be41b99b08e857a60308bb5e3ae0d952dcaf547aa3f7cd18094e151c4741"
+    },
+    {
+      "path": "titres/GentiumBookPlus/LICENSE.txt",
+      "kind": "note",
+      "size": 4507,
+      "sha256": "c309a440be606e283ccacc746662d714b9c5b5a7a0a10dd2514b90206b55ddfe"
+    },
+    {
+      "path": "titres/GentiumBookPlus/README.md",
+      "kind": "note",
+      "size": 1626,
+      "sha256": "f6d79d726dc30393c53575cfa00294d828378d452435c201c8f16370c4cd7f69"
+    },
+    {
+      "path": "titres/PlayfairDisplay/LICENSE.txt",
+      "kind": "note",
+      "size": 4449,
+      "sha256": "566be814f8e96e93dfa16101331557eb6b5467e9e03f627c0910fe93ca12300e"
+    },
+    {
+      "path": "titres/PlayfairDisplay/PlayfairDisplay-Bold.otf",
+      "kind": "font",
+      "size": 123536,
+      "sha256": "75f6aa085ef066e71b7df3a3676a9998e4a5f54729f7f05cd5201ef6a4fe0636"
+    },
+    {
+      "path": "titres/PlayfairDisplay/PlayfairDisplay-BoldItalic.otf",
+      "kind": "font",
+      "size": 111128,
+      "sha256": "b613cf6769b5a0beec526cbffedef84267585c906e61f900821c6d27f8a2140b"
+    },
+    {
+      "path": "titres/PlayfairDisplay/PlayfairDisplay-Italic.otf",
+      "kind": "font",
+      "size": 110816,
+      "sha256": "7e4cefc464d69f71c9f061006bec4fe7c19dd2cf0f013764765b40e6c12c7429"
+    },
+    {
+      "path": "titres/PlayfairDisplay/PlayfairDisplay-Regular.otf",
+      "kind": "font",
+      "size": 123240,
+      "sha256": "dcc9ebd7df30053345bf3f099e8e14e6ab3d61d35f4a96431cdbc575b1680e49"
+    },
+    {
+      "path": "titres/PlayfairDisplay/README.md",
+      "kind": "note",
+      "size": 1725,
+      "sha256": "45712c8e52e72b3601310b684beae2d5b89ff40662104ef12e8e72a8566b3a0d"
+    },
+    {
+      "path": "titres/Spectral/LICENSE.txt",
+      "kind": "note",
+      "size": 4392,
+      "sha256": "501d6ceca8e552630fe3aa9442b9a818565680a1a2f79f3fb8c13d6f309a9e98"
+    },
+    {
+      "path": "titres/Spectral/README.md",
+      "kind": "note",
+      "size": 1727,
+      "sha256": "6629a05ab9c048b4df474167eac18bfe603ac5e4a9d0ecc1240f649f89d7b239"
+    },
+    {
+      "path": "titres/Spectral/Spectral-Bold.otf",
+      "kind": "font",
+      "size": 171476,
+      "sha256": "344b30540e5e3e1960e899284814091b5ea520ae11bcbc67fe4ec0d5020da56c"
+    },
+    {
+      "path": "titres/Spectral/Spectral-BoldItalic.otf",
+      "kind": "font",
+      "size": 181632,
+      "sha256": "6c4ea27978ca20f4a441870c9da73df7ad9511eb701604488bfa0b8c92518804"
+    },
+    {
+      "path": "titres/Spectral/Spectral-Italic.otf",
+      "kind": "font",
+      "size": 173820,
+      "sha256": "546b80ec2686ff80da0fc210197bb12e8660163f34e01a25184403f99a154c29"
+    },
+    {
+      "path": "titres/Spectral/Spectral-Regular.otf",
+      "kind": "font",
+      "size": 164228,
+      "sha256": "93348f0af4ba18b90bb5f86e342614dedecdc13a0d5664ca64c8eb58e4379847"
+    }
+  ]
+}

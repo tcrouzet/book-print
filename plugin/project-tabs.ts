@@ -1,10 +1,11 @@
+import { t } from "./i18n.ts";
 let nextGroup = 0;
 
 export function mountProjectTabs(navigation: HTMLElement, panels: HTMLElement[], labels: string[], changed: () => void, makeEl: typeof createEl = createEl): (index: number) => void {
 	const group = ++nextGroup;
 	const buttons: HTMLButtonElement[] = [];
 	navigation.setAttribute("role", "tablist");
-	if (!navigation.hasAttribute("aria-label")) navigation.setAttribute("aria-label", "Configuration du projet");
+	if (!navigation.hasAttribute("aria-label")) navigation.setAttribute("aria-label", t("projectConfiguration"));
 	const select = (index: number) => {
 		for (const [position, panel] of panels.entries()) {
 			panel.hidden = position !== index;

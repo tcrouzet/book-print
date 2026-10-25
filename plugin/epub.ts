@@ -1,9 +1,12 @@
+import { resolveLocale, t } from "./i18n.ts";
 import * as timers from "node:timers";
 import { spawn } from "node:child_process";
-import { access, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import * as path from "node:path";
-import { prepareMarkdown, projectCss, localResource, isProjectNote, type BookProject } from "./project";
+import { prepareMarkdown, projectCss, localResource, isProjectNote, noteSeparators, type BookProject } from "./project";
 import type { CoverOptions } from "./cover";
+import { saveGeneratedFile, type ExistingOutputChoice } from "./output";
+import { resolveFont } from "./font-library.ts";
 
 export interface BookSource { path: string; content: string }
 
@@ -16,6 +19,8 @@ export interface EpubRequest {
 	resources: Readonly<Record<string, string>>;
 	renderCover: (options: CoverOptions) => Promise<Uint8Array>;
 	resolveImage?: (target: string, sourcePath: string) => string;
+	confirmOverwrite?: (filename: string) => Promise<ExistingOutputChoice>;
+	fontDirectory?: string;
 }
 
 function runPandoc(executable: string, args: string[], cwd: string, input: string): Promise<void> {
@@ -29,8 +34,8 @@ function runPandoc(executable: string, args: string[], cwd: string, input: strin
 		child.on("error", error => { timers.clearTimeout(timer); reject(error); });
 		child.on("close", code => {
 			timers.clearTimeout(timer);
-			if (timedOut) reject(new Error("Pandoc n’a pas terminé après cinq minutes."));
-			else if (code !== 0) reject(new Error(errorText.trim() || `Pandoc s’est arrêté (code ${code}).`));
+			if (timedOut) reject(new Error(t("pandocDidNotFinishWithinFiveMinutes")));
+			else if (code !== 0) reject(new Error(errorText.trim() || t("pandocStoppedCodeCode", { code: String(code) })));
 			else resolve();
 		});
 		child.stdin.on("error", error => {
@@ -40,36 +45,38 @@ function runPandoc(executable: string, args: string[], cwd: string, input: strin
 	});
 }
 
-export async function exportEpub(request: EpubRequest): Promise<string> {
+export async function exportEpub(request: EpubRequest): Promise<string | undefined> {
 	const { project, directory, output, resources } = request;
 	const manuscript = request.sources.filter(source => !isProjectNote(source.path.replace(/\\/g, "/")));
-	if (!manuscript.length) throw new Error("Aucun fichier Markdown à exporter.");
-	if (!path.isAbsolute(output) || path.extname(output).toLowerCase() !== ".epub") throw new Error("Le chemin de sortie doit désigner un EPUB.");
-	const sources = manuscript.map(source => {
+	if (!manuscript.length) throw new Error(t("noMarkdownFilesToExport"));
+	if (!path.isAbsolute(output) || path.extname(output).toLowerCase() !== ".epub") throw new Error(t("theOutputPathMustNameAnEpubFile"));
+	const pageBreak = noteSeparators.get(project.fusion.noteSeparator)?.pageBreak || undefined;
+	const customSeparator = pageBreak ? "" : project.fusion.noteSeparator;
+	const sources = manuscript.map((source, index) => {
 		let content = prepareMarkdown(source.content);
 		content = content.replace(/!\[\[([^\]\n]+)\]\]/g, (_original, link: string) => {
 			const [target, label] = link.split("|");
-			if (!request.resolveImage) throw new Error(`Impossible de résoudre l’image ![[${target}]] dans ${source.path}.`);
+			if (!request.resolveImage) throw new Error(t("couldNotResolveImageTargetInSource", { target: target, source: source.path }));
 			const imagePath = request.resolveImage(target, source.path).replace(/\\/g, "/").replace(/</g, "%3C").replace(/>/g, "%3E");
 			return `![${(label ?? "").replace(/[[\]]/g, "")}](<${imagePath}>)`;
 		});
-		return { directory: path.dirname(source.path), content: content + "\n\n" + project.fusion.noteSeparator };
+		return { directory: path.dirname(source.path), content: content + "\n\n" + (index < manuscript.length - 1 ? customSeparator : "") };
 	});
-	const fonts = project.fonts.map(filename => localResource(directory, filename));
+	const fonts = project.fonts.map(filename => resolveFont(directory, filename, request.fontDirectory));
 	const cssFiles = project.css.map(filename => localResource(directory, filename));
 	const cover = project.cover ? localResource(directory, project.cover) : undefined;
 	const background = !cover && project.background ? localResource(directory, project.background) : undefined;
 	for (const filename of [...fonts, ...cssFiles, ...(cover ? [cover] : []), ...(background ? [background] : [])]) {
-		try { await access(filename); } catch { throw new Error(`Ressource introuvable : ${filename}`); }
+		try { await access(filename); } catch { throw new Error(t("resourceNotFoundFilename", { filename: filename })); }
 	}
 	await mkdir(path.dirname(output), { recursive: true });
-	// Staging beside the destination lets rename preserve the last successful export.
+	// Staging beside the destination keeps replacement on the same filesystem.
 	const temporary = await mkdtemp(path.join(path.dirname(output), ".bookbinder-"));
 	try {
 		const args = ["--to=epub3", "--standalone", "--fail-if-warnings", `--toc-depth=${project.tocDepth}`, `--split-level=${project.splitLevel}`, "--wrap=none"];
-		for (const name of ["book-reader.lua", "epub-thin-space.lua", "epub-tab.lua"]) {
+		for (const name of ["book-reader.lua", "epub-tab.lua", "epub-thin-space.lua"]) {
 			const key = `lua/${name}`;
-			if (!resources[key]) throw new Error(`Ressource du plugin absente : ${key}`);
+			if (!resources[key]) throw new Error(t("missingPluginResourceFilename", { filename: key }));
 			const filename = path.join(temporary, name);
 			await writeFile(filename, resources[key]);
 			args.push(name === "book-reader.lua" ? `--from=${filename}` : `--lua-filter=${filename}`);
@@ -77,22 +84,19 @@ export async function exportEpub(request: EpubRequest): Promise<string> {
 		if (cssFiles.length) {
 			args.push(...cssFiles.map(filename => `--css=${filename}`));
 		} else {
-			let css = resources["epub/base.css"];
-			if (!css) throw new Error("La présentation EPUB du plugin est absente.");
-			const embeddedNames = new Set(fonts.map(filename => path.basename(filename)));
-			css = css.replace(/@font-face\s*\{[^}]*\}/g, face => {
-				const filename = face.match(/fonts\/([^'"]+)/)?.[1];
-				return filename && embeddedNames.has(filename) ? face : "";
-			});
+			const css = resources["epub/base.css"];
+			if (!css) throw new Error(t("thePluginSEpubPresentationIsMissing"));
 			await writeFile(path.join(temporary, "base.css"), css);
 			args.push(`--css=${path.join(temporary, "base.css")}`);
 		}
-		await writeFile(path.join(temporary, "presentation.css"), projectCss(project));
+		const separatorCss = pageBreak ? `\nbody .bookbinder-note-start{page-break-before:${pageBreak};break-before:${pageBreak === "always" ? "page" : pageBreak}}` : "";
+		await writeFile(path.join(temporary, "presentation.css"), projectCss(project) + separatorCss);
 		args.push(`--css=${path.join(temporary, "presentation.css")}`, ...fonts.map(filename => `--epub-embed-font=${filename}`));
 		const now = new Date();
 		let count = 0;
 		for (const source of request.sources) count += Array.from(source.content).length;
 		const metadata: Record<string, unknown> = { date: now.toISOString().slice(0, 10), ...project.metadata };
+		const bookLocale = resolveLocale(typeof metadata.lang === "string" ? metadata.lang : "fr");
 		const title = String(project.metadata.title);
 		Object.assign(metadata, { title: title.replace(/\\n|\n/g, " ") });
 		await writeFile(path.join(temporary, "metadata.json"), JSON.stringify(metadata));
@@ -104,16 +108,16 @@ export async function exportEpub(request: EpubRequest): Promise<string> {
 			const image = await request.renderCover({
 				title, author: Array.isArray(metadata.author) ? metadata.author.join(", ") : typeof metadata.author === "string" ? metadata.author : "",
 				subtitle: typeof metadata.subtitle === "string" ? metadata.subtitle : "", background: backgroundData,
-				footer: `${Math.floor(count / 1000)}k signes - ${now.toLocaleDateString("fr-FR")}`,
+				footer: t("countKCharactersDate", { count: Math.floor(count / 1000), date: now.toLocaleDateString(bookLocale) }, bookLocale),
 			});
 			coverFile = path.join(temporary, "cover.jpg");
 			await writeFile(coverFile, image);
 		}
 		const result = path.join(temporary, "book.epub");
 		args.push(`--metadata-file=${path.join(temporary, "metadata.json")}`, `--epub-cover-image=${coverFile}`, `--output=${result}`);
-		await runPandoc(request.pandoc, args, directory, JSON.stringify({ sources }));
-		await rename(result, output);
-		return output;
+		await runPandoc(request.pandoc, args, directory, JSON.stringify({ sources, pageBreak, disabledRules: project.disabledRules, separator: project.separator,
+			colophon: metadata.colophon ?? "", colophonCredit: t("generatedByBookbinderOn", { date: now.toLocaleDateString(bookLocale) }, bookLocale) }));
+		return await saveGeneratedFile(result, output, request.confirmOverwrite);
 	} finally {
 		await rm(temporary, { recursive: true, force: true });
 	}

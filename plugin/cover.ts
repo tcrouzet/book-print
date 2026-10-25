@@ -1,3 +1,4 @@
+import { t } from "./i18n.ts";
 export interface CoverOptions {
 	title: string;
 	author: string;
@@ -11,7 +12,7 @@ export async function renderCover(options: CoverOptions, makeEl: typeof createEl
 	canvas.width = 1600;
 	canvas.height = 2400;
 	const context = canvas.getContext("2d");
-	if (!context) throw new Error("Impossible de créer la couverture.");
+	if (!context) throw new Error(t("couldNotCreateTheCover"));
 	context.fillStyle = "rgb(250,250,250)";
 	context.fillRect(0, 0, canvas.width, canvas.height);
 	if (options.background) {
@@ -55,6 +56,6 @@ export async function renderCover(options: CoverOptions, makeEl: typeof createEl
 	lines.forEach((line, index) => text(line.toUpperCase(), 720 + index * lineHeight, Math.min(titleSize, lineHeight / 1.4), "rgb(180,20,20)", Math.max(4, Math.floor(titleSize / 13))));
 	text(options.subtitle, 720 + lines.length * lineHeight, 52, "rgb(120,120,120)");
 	text(options.footer, 2160, 48, "rgb(60,60,60)", 8);
-	const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error("La couverture JPEG n’a pas pu être générée.")), "image/jpeg", 0.92));
+	const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error(t("theJpegCoverCouldNotBeGenerated"))), "image/jpeg", 0.92));
 	return new Uint8Array(await blob.arrayBuffer());
 }

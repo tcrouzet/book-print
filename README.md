@@ -4,9 +4,13 @@
 
 A manuscript can live in a single note or across a whole folder of chapters. Bookbinder brings them together into an EPUB, with your title, cover, fonts and typography. Keep writing in Markdown and shape the book from inside Obsidian.
 
+Bookbinder follows Obsidian’s interface language: French or English, with English as the fallback for other languages. The book’s language is set separately in its project.
+
+Interface wording is editable in [`locales/fr.json`](locales/fr.json) and [`locales/en.json`](locales/en.json), inside the plugin folder. Each named key has its associated text, for example `bodyText` and `bodyFontWarning`. Edit the text on the right, keep keys and `{parameters}` intact, then reload Bookbinder. No rebuild is needed. Installed releases create missing language files automatically and preserve existing files. Invalid files trigger a notice and use the bundled wording.
+
 [Download Bookbinder](https://github.com/tcrouzet/bookbinder/releases) · [Report a problem](https://github.com/tcrouzet/bookbinder/issues)
 
-Bookbinder is in early development. **EPUB export is available. PDF and DOCX export are still in development.** The interface currently uses French labels.
+Bookbinder is in early development. **EPUB export is available. PDF and DOCX export are still in development.**
 
 ## Install Bookbinder
 
@@ -29,31 +33,48 @@ Right-click a Markdown file or a folder in the vault's file explorer and choose 
 
 The assembly happens in memory. Your source notes stay intact, and Bookbinder creates no merged Markdown file. Footnotes and relative image paths stay attached to their source chapters.
 
-The EPUB is saved beside the source file, or inside the selected source folder. To choose another destination anywhere on your computer, use **Dossier de génération → Parcourir…** in Bookbinder's settings. The reset button restores the default destination.
+In the project's assembly settings, choose no separator, a page break, or a break to an even or odd page between notes. EPUB reading apps may treat even and odd page requests as ordinary page breaks.
 
-EPUB files stand out in the explorer with your theme's accent colour. Open one and choose **Lire l’ePub** to launch your computer's reading app. If an export fails, Bookbinder keeps the last successfully generated EPUB.
+The EPUB is saved beside the source file, or inside the selected source folder. To choose another destination anywhere on your computer, use **Output folder → Browse…** in Bookbinder's settings. The reset button restores the default destination.
+
+When the output file already exists, choose **Replace**, **Create a version** or **Cancel**. A new version uses the next available name, such as `my-book-2.epub`, preserving existing files.
+
+EPUB files stand out in the explorer with your theme's accent colour. Open one and choose **Read ePub** to launch your computer's reading app. If an export fails, Bookbinder keeps the last successfully generated EPUB.
 
 ## Give each book its own project
 
-Open **Settings → Bookbinder → Créer/ouvrir projet** and choose your manuscript folder.
+Open **Settings → Bookbinder → Create/open project** and choose your manuscript folder.
 
 Set the title, author, language and other book details, then save. The same button opens an existing project. You can export without creating one: Bookbinder uses the file or folder name as the title and the default presentation. The default book language is French; choose another language in the project settings.
 
+**General → File name** sets the export name without an extension. Leave it empty to derive a lowercase slug from the first author’s last name and the title: Thierry Crouzet and *L’expérience humaine* produce `crouzet-experience-humaine.epub`. Spaces, accents and punctuation are normalised. The automatic suggestion follows title and author edits; a custom name remains fixed until you clear it.
+
 Each project lives in a **`bookbinder.md`** note beside the manuscript. It contains editable YAML properties and a link that opens the visual editor. You can keep your own notes below the properties. The project note is highlighted in the explorer and excluded from the exported book, including when it sits in a subfolder.
 
-Project settings, fonts and images can travel with the manuscript folder. Bookbinder preserves additional properties and your project notes when saving, and stops if the project file has been changed elsewhere while the editor is open.
+Project settings and images can travel with the manuscript folder. Imported fonts live in Bookbinder’s shared library. Bookbinder preserves additional properties and your project notes when saving, and stops if the project file has been changed elsewhere while the editor is open.
+
+To reuse a project's settings, choose **Settings → Bookbinder → Clone a project**, select its project file, then choose a destination folder. Bookbinder saves a new `bookbinder.md` and opens its editor. It preserves your project notes and leaves the source unchanged. The clone reuses library fonts and keeps image and CSS references; chapters are not copied. A folder that already contains a project cannot be used as the destination.
 
 ## Shape the typography
 
-The resizable project window starts with general book details, followed by separate **PDF**, **DOCX** and **ePub** tabs. For EPUB, **Page**, **Styles** and **Règles** let you work on the book's presentation without writing CSS.
+The resizable project window starts with general book details, followed by separate **PDF**, **DOCX** and **ePub** tabs. For EPUB, **Page**, **Styles** and **Rules** let you work on the book's presentation without writing CSS.
 
 - **Page** sets the top, bottom, left and right page margins.
-- **Styles** controls body text, headings, quotations, footnotes, lists, tables and other Markdown elements. A compact inspector groups character, paragraph and flow settings, with bold, italic and alignment buttons and a live preview.
-- **Règles** controls paragraphs following chapter headings and the opening drop cap. These contextual rules are separate from the Markdown styles.
+- **Styles** lists body text first, then headings, then other Markdown elements in the interface language’s alphabetical order. A compact inspector groups character, paragraph and flow settings, with bold, italic and alignment buttons and a live preview.
+- In the **Separator** style, choose **Line** or **Characters** and enter an ornament such as `⁂ · ⁂`. This applies to Markdown thematic breaks (`***`, `---` or `___`), including separators inserted when assembling notes. Character formatting and spacing use the same style controls.
+- For EPUB headings, **Flow → Heading position → One-third down the page** starts a new page and lowers the heading. **Auto** restores its previous top margin and page-break settings. Exact placement depends on the reading app’s pagination support.
+- **Book title** controls the title on the interior title page independently of chapter headings, including its font, size, spacing and one-third position.
+- **Rules** starts with the paragraph style: body text, quotation, footnote or tabulation. Then choose the first paragraph of that style after any heading, or the first character of that paragraph. Both choices include the style name; the formatting controls decide its appearance. **No rule** disables these effects for the selected style and keeps its settings for reactivation.
 
 EPUB sizes, spacing, paragraph margins and first-line indents use **em**, so the presentation can adapt to the reader's text size. **Auto** keeps the template's defaults; clearing a number restores Auto. The reading app can still apply its own layout preferences.
 
-Small caps, subscripts, superscripts and explicitly marked tabulated blocks are supported. Ordinary code blocks keep their literal content. Bookbinder works with Markdown and Pandoc syntax; it does not apply Folder Fusion's special formatting markers or expand embedded notes such as `![[chapter]]`. Standard Markdown images and Obsidian image embeds are supported.
+**Auto** is preserved when saving and reopening a project, including body text settings. The bundled CSS leaves the body font, size and colour to the reading app, keeps headings visible in the inherited colour, and applies no automatic initial-letter formatting. Fonts, colours and initial-letter effects are applied only when configured in the project.
+
+Body text uses **Auto** for its font by default. Importing a font does not assign it to the body. A red advisory in the Body text character controls recommends letting reading devices choose the font; you can still select one explicitly.
+
+**General → Publication → Colophon** accepts optional text in Markdown. Every EPUB ends with a separate page without a visible heading, containing that text when supplied. A centred credit block follows after a generous gap: “Generated by [Bookbinder](https://community.obsidian.md/plugins/bookbinder)”, with the generation date, translated into the book’s language. This page is excluded from the table of contents. Hyperlinks are underlined by default and inherit the text colour.
+
+Small caps, subscripts and superscripts are supported. Indented text, starting with a tab or at least four spaces, uses the **Tabulation** style and preserves Markdown emphasis. Explicit `.tab` blocks also use this style. Fenced code blocks keep their literal content. Bookbinder works with Markdown and Pandoc syntax; it does not apply Folder Fusion's special formatting markers or expand embedded notes such as `![[chapter]]`. Standard Markdown images and Obsidian image embeds are supported.
 
 PDF and DOCX presentation settings are stored separately, ready for their future exporters. They do not change the EPUB's settings.
 
@@ -61,9 +82,11 @@ PDF and DOCX presentation settings are stored separately, ready for their future
 
 Choose a cover image or let Bookbinder generate one from the title, author and subtitle, with an optional background image. The generated cover includes the book's length and date.
 
-Use **Importer des polices…** to choose OTF, TTF, WOFF or WOFF2 files from your computer. They become available in the style editor and are copied into the project's `fonts/` folder when you save. They are embedded in the EPUB, with no system font installation needed. Removing a font from the project leaves its file on disk.
+Use **Import fonts…** to choose OTF, TTF, WOFF or WOFF2 files from your computer. Imports are saved immediately in Bookbinder’s shared library, inside the plugin’s `data/_fonts/` folder. In another project, choose **Use** beside a library font. Selected fonts become available in the style editor and are embedded in the EPUB, with no system font installation needed. **Remove** clears a font from the project and keeps it in the library.
 
 The built-in presentation works without custom fonts. You can also supply your own CSS when a project needs more control.
+
+In Bookbinder’s general settings, **Fonts → Font package → Download and install** adds the optional [font collection](fonts/README.md) to the shared library. Its catalogue groups families for body text, headings and symbols, with usage notes, licences and source links. Installation preserves existing fonts; choose **Use** in a project to select the fonts you want. Notes and licences are kept in `data/_fonts/_package-notes/`.
 
 ## Local processing
 
@@ -71,7 +94,7 @@ Bookbinder assembles the manuscript locally, renders the automatic cover in Obsi
 
 The desktop plugin accesses project resources and export destinations through the filesystem, including folders you select outside the vault. It launches local executables to check Pandoc and LaTeX versions and uses Pandoc for conversion. These operations require filesystem and process access; commands run directly, without a system shell.
 
-Opening the settings contacts GitHub and the official TeX sites to check published tool versions. Installer links open only when clicked. Custom fonts and images come from the files you choose.
+Opening the settings contacts GitHub and the official TeX sites to check published tool versions. Installer links open only when clicked. The optional font package downloads from GitHub when you click its installation button. Custom fonts and images otherwise come from the files you choose.
 
 ## Documentation and support
 

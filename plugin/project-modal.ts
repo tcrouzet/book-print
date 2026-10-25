@@ -1,21 +1,25 @@
+import { getLocale, t } from "./i18n.ts";
 import { App, ButtonComponent, Modal, Notice, Setting, parseYaml, sanitizeHTMLToDom, setIcon, stringifyYaml } from "obsidian";
 import { readFile } from "node:fs/promises";
 import * as path from "node:path";
-import { localResource, parseProject, type BookProject } from "./project";
-import { loadFont, readProjectFile, saveProjectFile, type ImportedFont, type ProjectFile } from "./project-files";
+import { localResource, noteSeparators, parseProject, type BookProject } from "./project";
+import { loadFont, projectYaml, readProjectFile, saveProjectFile, type ImportedFont, type ProjectFile } from "./project-files";
 import { StyleEditor } from "./style-editor";
 import { mountProjectTabs } from "./project-tabs";
 import { chooseFiles } from "./dialogs";
+import { listFontLibrary, resolveFont, saveLibraryFont } from "./font-library.ts";
+import { fontFamily, fontFilename, libraryFontPrefix } from "./presentation.ts";
+import { bindFilenameInput } from "./filename.ts";
 
 function record(value: unknown): Record<string, unknown> {
 	return value && typeof value === "object" && !Array.isArray(value) ? { ...value as Record<string, unknown> } : {};
 }
 
-export async function openProjectEditor(app: App, directory: string, baseCss: string): Promise<void> {
+export async function openProjectEditor(app: App, directory: string, baseCss: string, fontDirectory: string): Promise<void> {
 	const original = await readProjectFile(directory);
 	const data: unknown = original === undefined ? {} : parseYaml(original.yaml);
 	const project = parseProject(data, path.basename(directory));
-	new ProjectModal(app, directory, baseCss, original, record(data), project).open();
+	new ProjectModal(app, directory, baseCss, original, record(data), project, fontDirectory).open();
 }
 
 class ProjectModal extends Modal {
@@ -26,7 +30,7 @@ class ProjectModal extends Modal {
 	private projects: Record<"pdf" | "docx" | "epub", BookProject>;
 	private nestedTabs: { panels: HTMLElement[]; select: (index: number) => void }[] = [];
 	private error!: HTMLElement;
-	private pendingFonts = new Map<string, ImportedFont>();
+	private libraryFonts: string[] = [];
 	private dirty = false;
 	private discard = false;
 	private saving = false;
@@ -36,9 +40,10 @@ class ProjectModal extends Modal {
 	private saveButton?: ButtonComponent;
 	private panels: HTMLElement[] = [];
 	private selectPanel: (index: number) => void = () => {};
+	private refreshFilename: () => void = () => {};
 
 	constructor(app: App, private directory: string, private baseCss: string, private original: ProjectFile | undefined,
-		private data: Record<string, unknown>, private project: BookProject) {
+		private data: Record<string, unknown>, private project: BookProject, private fontDirectory: string) {
 		super(app);
 		this.projects = {
 			pdf: parseProject({ epub: data.pdf }, path.basename(directory)),
@@ -52,138 +57,140 @@ class ProjectModal extends Modal {
 
 	onOpen(): void {
 		this.modalEl.addClass("bookbinder-project-modal");
-		this.setTitle(this.original === undefined ? "Créer un projet de livre" : "Modifier le projet de livre");
+		this.setTitle(this.original === undefined ? t("createABookProject") : t("editBookProject"));
 		this.contentEl.createDiv({ text: this.directory, cls: "bookbinder-project-path" });
-		const navigation = this.contentEl.createDiv({ cls: "bookbinder-project-tabs", attr: { role: "tablist", "aria-label": "Configuration du projet" } });
+		const navigation = this.contentEl.createDiv({ cls: "bookbinder-project-tabs", attr: { role: "tablist", "aria-label": t("projectConfiguration") } });
 		const layout = this.contentEl.createDiv({ cls: "bookbinder-project-layout" });
 		const information = layout.createDiv({ cls: "bookbinder-project-information" });
 		const formats = ["pdf", "docx", "epub"] as const;
 		const formatPanels = formats.map(() => layout.createDiv({ cls: "bookbinder-project-format" }));
 		this.panels = [information, ...formatPanels];
-		this.selectPanel = mountProjectTabs(navigation, this.panels, ["Généralités", "PDF", "DOCX", "ePub"], () => {
+		this.selectPanel = mountProjectTabs(navigation, this.panels, [t("general"), "PDF", "DOCX", "ePub"], () => {
 			layout.scrollTop = 0;
 			for (const editor of this.styleEditors) editor.refresh();
 		});
-		information.createEl("h3", { text: "Généralités" });
-		this.metadata(information, "title", "Titre", true, true);
-		this.metadata(information, "subtitle", "Sous-titre", true);
-		this.metadata(information, "author", "Auteur ou autrice", true);
-		this.metadata(information, "lang", "Langue", false, true);
+		this.metadata(information, "title", t("title"), true, true);
+		this.metadata(information, "subtitle", t("subtitle"), true);
+		this.metadata(information, "author", t("author"), true);
+		new Setting(information).setName(t("fileName")).setDesc(t("fileNameDescription")).addText(input => {
+			input.inputEl.setAttribute("aria-label", t("fileName"));
+			this.refreshFilename = bindFilenameInput(input.inputEl, this.data, this.project.metadata, () => this.markDirty());
+		});
+		this.metadata(information, "lang", t("language"), false, true);
 		const publication = information.createEl("details");
-		publication.createEl("summary", { text: "Publication" });
+		publication.createEl("summary", { text: t("publication") });
 		for (const [key, label] of [
-			["description", "Description"], ["subject", "Sujets"], ["rights", "Droits"], ["identifier", "Identifiant du livre"],
-			["publisher", "Éditeur"], ["author-url", "Site de l’auteur"], ["publisher-url", "Site de l’éditeur"],
-			["isbn", "ISBN papier"], ["isbn-ebook", "ISBN numérique"], ["date", "Date de publication"],
-		]) this.metadata(publication, key, label, key === "description");
+			["description", t("description")], ["subject", t("subjects")], ["rights", t("rights")], ["identifier", t("bookIdentifier")],
+			["publisher", t("publisher")], ["author-url", t("authorWebsite")], ["publisher-url", t("publisherWebsite")],
+			["isbn", t("printIsbn")], ["isbn-ebook", t("digitalIsbn")], ["date", t("publicationDate")],
+			["colophon", t("colophon")],
+		]) this.metadata(publication, key, label, key === "description" || key === "colophon");
 		const cover = information.createEl("details");
-		cover.createEl("summary", { text: "Couverture" });
-		this.image(cover, "cover", "Couverture", "Automatique");
-		this.image(cover, "cover-background", "Image de fond", "Sans image de fond");
+		cover.createEl("summary", { text: t("cover") });
+		this.image(cover, "cover", t("cover"), t("automatic"));
+		this.image(cover, "cover-background", t("backgroundImage"), t("noBackgroundImage"));
 		const fonts = information.createDiv({ cls: "bookbinder-fonts" });
-		fonts.createEl("h3", { text: "Polices" });
+		fonts.createEl("h3", { text: t("fontLibrary") });
 		const fontList = fonts.createDiv({ cls: "bookbinder-font-list" });
 		let fontBusy = true;
 		const showFonts = () => {
 			fontList.empty();
-			if (!this.project.fonts.length) fontList.createDiv({ text: "Polices par défaut (Auto)", cls: "bookbinder-muted" });
-			for (const filename of this.project.fonts) {
+			if (!this.project.fonts.length) fontList.createDiv({ text: t("defaultFontsAuto"), cls: "bookbinder-muted" });
+			const available = Array.from(new Set([...this.libraryFonts, ...this.project.fonts])).sort((left, right) => fontFilename(left).localeCompare(fontFilename(right), getLocale()));
+			for (const filename of available) {
 				const row = fontList.createDiv({ cls: "bookbinder-font-row" });
-				row.createSpan({ text: filename.split(/[/\\]/).pop() });
-				new ButtonComponent(row).setButtonText("Retirer").setDisabled(fontBusy).setTooltip("Retirer du projet sans supprimer le fichier").onClick(() => {
-					for (const editor of this.styleEditors) editor.removeFont(filename);
-					this.pendingFonts.delete(path.basename(filename)); showFonts(); importButton.buttonEl.focus();
-				});
+				row.createSpan({ text: fontFilename(filename) });
+				const selected = this.project.fonts.includes(filename);
+				const button = new ButtonComponent(row).setButtonText(selected ? t("remove") : t("use")).setDisabled(fontBusy)
+					.setTooltip(selected ? t("removeFromProjectWithoutDeletingTheFile") : t("useThisFontInTheProject"))
+					.onClick(() => this.action(async () => {
+						setFontBusy(true);
+						try {
+							if (selected) { for (const editor of this.styleEditors) editor.removeFont(filename); this.refreshFonts(); }
+							else await this.useFont(filename);
+							this.markDirty();
+						} finally { setFontBusy(false); if (!this.closed) importButton.buttonEl.focus(); }
+					}));
+				button.buttonEl.setAttribute("aria-label", t(selected ? "removeFontFromTheProject" : "useFontInTheProject", { font: fontFilename(filename) }));
 			}
 		};
 		showFonts();
-		const importButton = new ButtonComponent(fonts).setButtonText("Importer des polices…").setDisabled(true);
+		const importButton = new ButtonComponent(fonts).setButtonText(t("importFonts")).setDisabled(true);
 		const setFontBusy = (busy: boolean) => {
 			fontBusy = busy;
 			if (this.closed) return;
-			importButton.setDisabled(busy).setButtonText(busy ? "Chargement des polices…" : "Importer des polices…"); showFonts();
+			importButton.setDisabled(busy).setButtonText(busy ? t("loadingFonts") : t("importFonts")); showFonts();
 		};
 		importButton.onClick(() => this.action(async () => {
 			setFontBusy(true);
 			try {
-				const filenames = await chooseFiles("Choisir les polices", ["otf", "ttf", "woff", "woff2"], true);
+				const filenames = await chooseFiles(t("chooseFonts"), ["otf", "ttf", "woff", "woff2"], true);
 				const loaded = await Promise.all(filenames.map(loadFont));
 				for (const font of loaded) {
-					const existing = this.pendingFonts.get(font.name);
-					if (existing && !Buffer.from(existing.data).equals(Buffer.from(font.data))) throw new Error(`Deux polices différentes portent le nom ${font.name}. Renommez-en une.`);
-					const relative = `fonts/${font.name}`;
-					if (this.project.fonts.some(filename => path.basename(filename) === font.name && filename !== relative)) throw new Error(`La police ${font.name} est déjà dans le projet. Vous pouvez la choisir dans la barre de mise en forme.`);
-					for (const editor of this.styleEditors) await editor.addFont(relative, font.data);
+					const reference = await this.importFont(font);
 					if (this.closed) return;
-					this.pendingFonts.set(font.name, font);
-					if (!this.project.fonts.includes(relative)) this.project.fonts.push(relative);
-					for (const editor of this.styleEditors) editor.presentation.fonts = this.project.fonts;
+					if (!this.libraryFonts.includes(reference)) this.libraryFonts.push(reference);
+					await this.useFont(reference, font);
 					this.markDirty();
 					showFonts();
 				}
 			} finally { setFontBusy(false); }
 		}));
-		fonts.createEl("p", { text: "Les polices importées seront enregistrées dans le dossier fonts du projet et proposées dans la barre de mise en forme.", cls: "bookbinder-muted" });
-		const epub = formatPanels[2].createEl("details");
-		epub.createEl("summary", { text: "Sommaire et fichiers de style" });
-		for (const [key, label] of [["tocDepth", "Profondeur du sommaire"], ["splitLevel", "Niveau de découpage"]] as const) {
-			new Setting(epub).setName(label).addDropdown(input => {
-				for (let level = 1; level <= 6; level++) input.addOption(String(level), String(level));
-				const name = key === "tocDepth" ? "toc-depth" : "split-level";
-				const explicit = record(this.data.epub)[name] ?? (key === "tocDepth" ? this.data.toc_level : undefined);
-				input.addOption("", "Auto").setValue(explicit === undefined ? "" : String(this.project[key])).onChange(value => {
-					this.project[key] = value ? Number(value) : 2;
-					const data = record(this.data.epub);
-					if (value) data[name] = Number(value);
-					else { delete data[name]; if (key === "tocDepth") delete this.data.toc_level; }
-					this.data.epub = data; this.markDirty();
-				});
-				input.selectEl.setAttribute("aria-label", label);
-			});
-		}
-		const css = new Setting(epub).setName("Feuille de style existante").setDesc(this.project.css.join(", ") || "Présentation intégrée");
-		css.addButton(button => button.setButtonText("Parcourir…").onClick(() => this.action(async () => {
-			const filenames = await chooseFiles("Choisir les feuilles de style", ["css"], true);
-			if (!filenames.length) return;
-			const contents = await Promise.all(filenames.map(filename => readFile(filename, "utf8")));
-			this.project.css = filenames.map(filename => this.relative(filename));
-			this.editor!.setBaseCss(contents.join("\n")); this.ruleEditor?.setBaseCss(contents.join("\n"));
-			css.setDesc(this.project.css.join(", ")); this.markDirty();
-		})));
-		css.addButton(button => button.setButtonText("Réinitialiser").onClick(() => {
-			this.project.css = []; css.setDesc("Présentation intégrée"); this.editor!.setBaseCss(this.baseCss); this.ruleEditor?.setBaseCss(this.baseCss); this.markDirty();
-		}));
+		fonts.createEl("p", { text: t("fontLibraryDescription"), cls: "bookbinder-muted" });
 		const fusion = information.createEl("details");
-		fusion.createEl("summary", { text: "Assemblage des fichiers" });
-		for (const [key, label] of [["excludeCharacters", "Caractères à exclure des noms"], ["excludeNames", "Noms à exclure, séparés par des virgules"], ["noteSeparator", "Séparateur entre les notes"]] as const) {
+		fusion.createEl("summary", { text: t("fileAssembly") });
+		for (const [key, label] of [["excludeCharacters", t("charactersToExcludeFromNames")], ["excludeNames", t("namesToExcludeSeparatedByCommas")]] as const) {
 			new Setting(fusion).setName(label).addText(input => {
 				input.setValue(this.project.fusion[key]).onChange(value => { this.project.fusion[key] = value; this.markDirty(); });
 				input.inputEl.setAttribute("aria-label", label);
 			});
 		}
+		const currentSeparator = this.project.fusion.noteSeparator;
+		let customSeparator = noteSeparators.has(currentSeparator) ? "" : currentSeparator;
+		let separatorInput: HTMLInputElement;
+		new Setting(fusion).setName(t("separatorBetweenNotes")).addDropdown(input => {
+			for (const [value, choice] of noteSeparators) input.addOption(value, choice.label);
+			input.addOption("__custom__", t("customCharacters"));
+			input.setValue(noteSeparators.has(currentSeparator) ? currentSeparator : "__custom__").onChange(value => {
+				separatorInput.hidden = value !== "__custom__";
+				this.project.fusion.noteSeparator = value === "__custom__" ? customSeparator : value;
+				this.markDirty();
+				if (!separatorInput.hidden) separatorInput.focus();
+			});
+			input.selectEl.setAttribute("aria-label", t("separatorBetweenNotes"));
+		}).addText(input => {
+			separatorInput = input.inputEl;
+			separatorInput.hidden = noteSeparators.has(currentSeparator);
+			separatorInput.setAttribute("aria-label", t("customCharacters"));
+			input.setValue(customSeparator).onChange(value => {
+				customSeparator = value;
+				this.project.fusion.noteSeparator = value;
+				this.markDirty();
+			});
+		});
 		for (const [index, format] of formats.entries()) {
 			const panel = formatPanels[index];
-			const tabs = panel.createDiv({ cls: "bookbinder-project-tabs", attr: { "aria-label": "Réglages " + format.toUpperCase() } });
+			const tabs = panel.createDiv({ cls: "bookbinder-project-tabs", attr: { "aria-label": t("formatSettings", { format: format.toUpperCase() }) } });
 			panel.prepend(tabs);
 			const page = panel.createDiv({ cls: "bookbinder-project-page" });
 			const presentation = panel.createDiv({ cls: "bookbinder-project-presentation" });
-			page.createEl("h3", { text: "Page" });
+			page.createEl("h3", { text: t("page") });
 			page.createEl("p", { text: format === "epub"
-				? "Le format d’un EPUB s’adapte à l’écran de la liseuse. Les marges sont exprimées en em. Auto conserve les valeurs du modèle."
-				: "Auto conserve les marges du modèle ; les valeurs saisies ici sont exprimées en millimètres.", cls: "bookbinder-muted" });
+				? t("epubPageDescription")
+				: t("autoKeepsTheTemplateMarginsValuesEnteredHereUseMillimetres"), cls: "bookbinder-muted" });
 			const pageFields = page.createDiv({ cls: "bookbinder-page-fields" });
-			presentation.createEl("h3", { text: "Styles" });
+			presentation.createEl("h3", { text: t("styles") });
 			const editor = new StyleEditor(presentation, this.projects[format], this.baseCss, () => this.markDirty(), () => this.close(), { format, setIcon, sanitizeHTMLToDom });
 			this.editors.set(format, editor);
 			void editor.mountPage(pageFields);
 			const panels = [page, presentation];
-			const labels = ["Page", "Styles"];
+			const labels = [t("page"), t("styles")];
 			if (format === "epub") {
 				const rules = panel.createDiv({ cls: "bookbinder-project-presentation" });
-				rules.createEl("h3", { text: "Règles" });
-				rules.createEl("p", { text: "Premiers paragraphes après un titre et lettrine du modèle après un titre 2.", cls: "bookbinder-muted" });
+				rules.createEl("h3", { text: t("afterAHeading") });
+				rules.createEl("p", { text: t("headingRuleDescription"), cls: "bookbinder-muted" });
 				this.ruleEditor = new StyleEditor(rules, this.project, this.baseCss, () => this.markDirty(), () => this.close(), { format, setIcon, sanitizeHTMLToDom, rules: true });
-				panels.push(rules); labels.push("Règles");
+				panels.push(rules); labels.push(t("rules"));
 			}
 			const select = mountProjectTabs(tabs, panels, labels, () => { editor.refresh(); if (format === "epub") this.ruleEditor?.refresh(); });
 			this.nestedTabs.push({ panels, select });
@@ -191,8 +198,8 @@ class ProjectModal extends Modal {
 		this.editor = this.editors.get("epub");
 		this.error = this.contentEl.createDiv({ cls: "bookbinder-project-error", attr: { role: "alert", "aria-live": "polite" } });
 		const footer = this.contentEl.createDiv({ cls: "bookbinder-project-actions" });
-		this.cancelButton = new ButtonComponent(footer).setButtonText("Annuler").onClick(() => this.close());
-		this.saveButton = new ButtonComponent(footer).setButtonText("Enregistrer le projet").setCta().onClick(() => this.action(() => this.save()));
+		this.cancelButton = new ButtonComponent(footer).setButtonText(t("cancel")).onClick(() => this.close());
+		this.saveButton = new ButtonComponent(footer).setButtonText(t("saveProject")).setCta().onClick(() => this.action(() => this.save()));
 		void this.action(async () => {
 			setFontBusy(true);
 			try {
@@ -202,13 +209,36 @@ class ProjectModal extends Modal {
 					const css = (await Promise.all(this.project.css.map(filename => readFile(localResource(this.directory, filename), "utf8")))).join("\n");
 					this.editor!.setBaseCss(css); this.ruleEditor?.setBaseCss(css);
 				}
-				for (const filename of this.project.fonts) {
-					const font = await loadFont(localResource(this.directory, filename));
-					for (const editor of this.styleEditors) await editor.addFont(filename, font.data);
+				this.libraryFonts = await listFontLibrary(this.fontDirectory);
+				for (const filename of [...this.project.fonts]) {
+					const font = await loadFont(resolveFont(this.directory, filename, this.fontDirectory));
+					const reference = filename.startsWith(libraryFontPrefix) ? filename : await this.importFont(font);
+					if (!this.libraryFonts.includes(reference)) this.libraryFonts.push(reference);
+					await this.useFont(reference, font);
+					if (reference !== filename) this.project.fonts.splice(this.project.fonts.indexOf(filename), 1);
 				}
+				this.refreshFonts();
 			} finally { setFontBusy(false); }
 		});
 		this.contentEl.querySelector<HTMLTextAreaElement>("textarea")?.focus();
+	}
+
+	private refreshFonts(): void {
+		for (const editor of this.styleEditors) { editor.presentation.fonts = this.project.fonts; editor.refreshFonts(); }
+	}
+
+	private async importFont(font: ImportedFont): Promise<string> {
+		try { await new FontFace(fontFamily(font.name), new Uint8Array(font.data).buffer).load(); }
+		catch { throw new Error(t("theFontFontCouldNotBeLoadedChooseAValidFontFile", { font: font.name })); }
+		return saveLibraryFont(this.fontDirectory, font);
+	}
+
+	private async useFont(reference: string, font?: ImportedFont): Promise<void> {
+		font ??= await loadFont(resolveFont(this.directory, reference, this.fontDirectory));
+		for (const editor of this.styleEditors) await editor.addFont(reference, font.data);
+		if (this.closed) return;
+		if (!this.project.fonts.includes(reference)) this.project.fonts.push(reference);
+		this.refreshFonts();
 	}
 
 	private metadata(container: HTMLElement, key: string, label: string, multiline = false, required = false): void {
@@ -220,10 +250,10 @@ class ProjectModal extends Modal {
 			this.data.lang = current;
 			const codes = ["fr", "en", "es", "de", "it", "pt", "nl", "sv", "da", "no", "fi", "pl", "cs", "ru", "uk", "el", "tr", "ar", "he", "zh", "ja", "ko"];
 			if (!codes.includes(current)) codes.push(current);
-			const names = new Intl.DisplayNames(["fr"], { type: "language" });
+			const names = new Intl.DisplayNames([getLocale()], { type: "language" });
 			const name = (code: string) => { try { return names.of(code) || code; } catch { return code; } };
 			setting.addDropdown(input => {
-				for (const code of codes.sort((left, right) => name(left).localeCompare(name(right), "fr"))) input.addOption(code, name(code));
+				for (const code of codes.sort((left, right) => name(left).localeCompare(name(right), getLocale()))) input.addOption(code, name(code));
 				input.setValue(current).onChange(value => { this.data.lang = value; this.markDirty(); });
 				input.selectEl.setAttribute("aria-label", label);
 			});
@@ -235,12 +265,13 @@ class ProjectModal extends Modal {
 			if (key === "date" && /^\d{4}-\d{2}-\d{2}/.test(text)) input.value = text.slice(0, 10);
 			input.required = required;
 			input.setAttribute("aria-label", label);
-			if (input instanceof HTMLTextAreaElement) input.rows = key === "description" ? 4 : 2;
+			if (input instanceof HTMLTextAreaElement) input.rows = 1;
 			input.addEventListener("input", () => {
 				let value: string | string[] = input.value;
 				if (key === "author") { const names = value.split("\n").map(name => name.trim()).filter(Boolean); value = names.length > 1 ? names : names[0] ?? ""; }
 				if (key === "subject") value = input.value.split(",").map(item => item.trim()).filter(Boolean);
 				this.data[key] = value;
+				if (key === "title" || key === "author") this.refreshFilename();
 				if (key === "author-url") delete this.data.author_url;
 				this.markDirty();
 			});
@@ -252,18 +283,18 @@ class ProjectModal extends Modal {
 	private image(container: HTMLElement, key: string, label: string, fallback: string): void {
 		const value = this.data[key] ?? (key === "cover" ? this.project.cover : this.project.background);
 		const setting = new Setting(container).setName(label).setDesc(typeof value === "string" && value ? value : fallback);
-		setting.addButton(button => button.setButtonText("Parcourir…").onClick(() => this.action(async () => {
+		setting.addButton(button => button.setButtonText(t("browseDialog")).onClick(() => this.action(async () => {
 			const [filename] = await chooseFiles(label, ["jpg", "jpeg", "png", "webp", "gif", "svg"]);
 			if (!filename) return;
 			this.data[key] = this.relative(filename); setting.setDesc(String(this.data[key])); this.markDirty();
 		})));
-		setting.addButton(button => button.setButtonText("Réinitialiser").onClick(() => { this.data[key] = ""; setting.setDesc(fallback); this.markDirty(); }));
+		setting.addButton(button => button.setButtonText(t("reset")).onClick(() => { this.data[key] = ""; setting.setDesc(fallback); this.markDirty(); }));
 	}
 
 	private relative(filename: string): string { return path.relative(this.directory, filename).split(path.sep).join("/"); }
 
 	private markDirty(): void {
-		this.dirty = true; this.discard = false; this.cancelButton?.setButtonText("Annuler");
+		this.dirty = true; this.discard = false; this.cancelButton?.setButtonText(t("cancel"));
 	}
 
 	private async action(callback: () => Promise<void>): Promise<void> {
@@ -275,7 +306,7 @@ class ProjectModal extends Modal {
 			if (!this.closed) {
 				const code = (error as NodeJS.ErrnoException).code;
 				this.error.setText(code === "EACCES" || code === "EPERM"
-					? "Accès refusé. Vérifiez les droits d’accès au dossier du projet et aux fichiers choisis."
+					? t("projectAccessDenied")
 					: error instanceof Error ? error.message : String(error));
 			}
 		}
@@ -283,7 +314,7 @@ class ProjectModal extends Modal {
 	}
 
 	private async save(): Promise<void> {
-		if (this.pendingActions > 1) throw new Error("Attendez la fin du chargement des polices et des ressources avant d’enregistrer.");
+		if (this.pendingActions > 1) throw new Error(t("waitForFontsAndResourcesToFinishLoadingBeforeSaving"));
 		const invalid = Array.from(this.contentEl.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input,textarea")).find(input => !input.checkValidity());
 		if (invalid) {
 			const index = this.panels.findIndex(panel => panel.contains(invalid));
@@ -300,25 +331,30 @@ class ProjectModal extends Modal {
 		for (const [format, editor] of this.editors) {
 			editor.normalizeUnits();
 			const presentation = editor.presentation;
-			const settings = { ...record(this.data[format]), style: presentation.style, page: presentation.page,
+			const settings: Record<string, unknown> = { ...record(this.data[format]), style: presentation.style, page: presentation.page,
 				headings: Object.fromEntries(Object.entries(presentation.headings).filter(([, values]) => Object.keys(values).length)),
 				styles: Object.fromEntries(Object.entries(presentation.styles ?? {}).filter(([, values]) => Object.keys(values).length)),
+				"disabled-rules": presentation.disabledRules ?? [],
 				rules: Object.fromEntries(Object.entries(presentation.rules ?? {}).filter(([, values]) => Object.keys(values).length)) };
+			if (format === "epub") {
+				delete settings.separator;
+				if (presentation.separator !== undefined) settings.separator = presentation.separator;
+			}
 			data[format] = format === "epub" ? { ...settings, fonts: this.project.fonts, css: this.project.css } : settings;
 			parseProject({ epub: data[format] }, path.basename(this.directory));
 		}
 		parseProject(data, path.basename(this.directory));
 		this.saving = true;
-		this.saveButton?.setButtonText("Enregistrement…");
+		this.saveButton?.setButtonText(t("saving"));
 		const controls = this.contentEl.querySelectorAll<HTMLButtonElement | HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("button,input,textarea,select");
 		for (const control of controls) control.disabled = true;
 		try {
-			await saveProjectFile(this.directory, stringifyYaml(data), this.original, Array.from(this.pendingFonts.values()));
+			await saveProjectFile(this.directory, projectYaml(data, stringifyYaml), this.original);
 			this.dirty = false;
-			new Notice(`Projet enregistré : ${path.join(this.directory, "bookbinder.md")}`);
+			new Notice(t("projectSavedFilename", { filename: path.join(this.directory, "bookbinder.md") }));
 		} finally {
 			this.saving = false;
-			this.saveButton?.setButtonText("Enregistrer le projet");
+			this.saveButton?.setButtonText(t("saveProject"));
 			for (const control of controls) control.disabled = false;
 		}
 		this.close();
@@ -327,9 +363,9 @@ class ProjectModal extends Modal {
 	close(): void {
 		if (this.saving) return;
 		if (this.dirty && !this.discard) {
-			this.error.setText("Modifications non enregistrées. Enregistrez le projet avant de fermer ou abandonnez les modifications.");
+			this.error.setText(t("projectUnsavedChanges"));
 			this.discard = true;
-			this.cancelButton?.setButtonText("Fermer sans enregistrer");
+			this.cancelButton?.setButtonText(t("closeWithoutSaving"));
 			return;
 		}
 		super.close();
@@ -338,7 +374,6 @@ class ProjectModal extends Modal {
 	onClose(): void {
 		this.closed = true;
 		for (const editor of this.styleEditors) editor.dispose();
-		this.pendingFonts.clear();
 		this.contentEl.empty();
 	}
 }

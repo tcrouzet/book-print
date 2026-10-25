@@ -40,7 +40,8 @@
 	overflow-wrap: anywhere;
 }
 
-.bookbinder-project-path { margin-bottom: var(--size-4-4); }
+.bookbinder-project-path { margin-bottom: var(--size-4-2); }
+.bookbinder-project-modal h3 { margin-block: var(--size-4-2); }
 
 .bookbinder-project-layout {
 	display: block;
@@ -50,31 +51,39 @@
 }
 
 .bookbinder-project-information { min-width: 0; padding-right: var(--size-4-2); }
+.bookbinder-settings .setting-item, .bookbinder-project-modal .setting-item { border: 0; }
 .bookbinder-project-panel[hidden] { display: none; }
-.bookbinder-project-tabs { display: flex; flex-wrap: wrap; gap: var(--size-4-2); margin-bottom: var(--size-4-3); }
+.bookbinder-project-tabs { display: flex; flex-wrap: wrap; gap: var(--size-4-1); margin-bottom: var(--size-4-2); }
 .bookbinder-project-tabs [aria-selected="true"] { background: var(--interactive-accent); color: var(--text-on-accent); }
-.bookbinder-page-fields { display: flex; flex-direction: column; gap: var(--size-4-4); }
+.bookbinder-page-fields { display: flex; flex-direction: column; gap: var(--size-4-2); }
 .bookbinder-page-field { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--size-4-2); }
-.bookbinder-page-field input { width: 10em; min-height: 44px; }
+.bookbinder-page-field input { width: 7em; height: var(--input-height, 28px); }
 
 .bookbinder-project-information .setting-item {
-	display: block;
-	padding-block: var(--size-4-2);
+	display: grid;
+	grid-template-columns: minmax(8rem, 0.4fr) minmax(0, 1fr);
+	align-items: start;
+	gap: var(--size-4-2);
+	padding-block: var(--size-4-1);
 }
 
 .bookbinder-project-information .setting-item-control {
 	justify-content: flex-start;
 	flex-wrap: wrap;
-	margin-top: var(--size-4-1);
+	margin: 0;
+	min-width: 0;
 }
 
 .bookbinder-project-information input[type="text"],
 .bookbinder-project-information textarea { width: 100%; }
+.bookbinder-project-information textarea { field-sizing: content; height: auto; min-height: var(--input-height, 28px); max-height: 10lh; resize: vertical; }
+.bookbinder-project-information .setting-item-info { margin: 0; min-width: 0; }
+.bookbinder-project-information .setting-item-description { overflow-wrap: anywhere; }
 
 .bookbinder-project-information summary {
 	cursor: pointer;
 	font-weight: var(--font-semibold);
-	padding-block: var(--size-4-3);
+	padding-block: var(--size-4-2);
 }
 
 .bookbinder-font-list {
@@ -99,18 +108,20 @@
 	overflow: hidden;
 }
 
-.bookbinder-style-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--size-4-2); align-items: end; padding: var(--size-4-3); }
+.bookbinder-style-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--size-4-2); align-items: end; padding: var(--size-4-2); }
 .bookbinder-style-header > label > span { display: none; }
+.bookbinder-rule-header > label:first-child { grid-column: 1 / -1; }
+.bookbinder-rule-header > label > span { display: block; }
 .bookbinder-inspector-tabs { display: flex; border-bottom: 1px solid var(--background-modifier-border); padding-inline: var(--size-4-3); }
 .bookbinder-inspector-tabs button { flex: 1; min-width: 0; padding-inline: var(--size-4-2); border: 0; border-bottom: 2px solid transparent; border-radius: 0; box-shadow: none; background: transparent; color: var(--text-muted); }
 .bookbinder-inspector-tabs button[aria-selected="true"] { border-bottom-color: var(--interactive-accent); color: var(--text-normal); font-weight: var(--font-semibold); }
-.bookbinder-inspector-panel { display: grid; gap: var(--size-4-3); padding: var(--size-4-3); align-content: start; }
-.bookbinder-character-main { display: grid; grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr)); gap: var(--size-4-2); }
+.bookbinder-inspector-panel { display: grid; gap: var(--size-4-2); padding: var(--size-4-2); align-content: start; }
+.bookbinder-character-main { display: grid; grid-template-columns: minmax(0, 1fr) repeat(2, minmax(0, 7rem)); gap: var(--size-4-2); }
 .bookbinder-character-options { display: flex; align-items: end; gap: var(--size-4-2); flex-wrap: wrap; }
 .bookbinder-character-options > label { flex: 1; min-width: 7rem; }
-.bookbinder-style-emphasis, .bookbinder-style-alignment { display: flex; gap: var(--size-4-2); }
+.bookbinder-style-emphasis, .bookbinder-style-alignment { display: flex; gap: var(--size-4-1); }
 .bookbinder-paragraph-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(5rem, 0.4fr); align-items: end; gap: var(--size-4-3); }
-.bookbinder-style-margins { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--size-4-2); }
+.bookbinder-style-margins { display: grid; grid-template-columns: repeat(4, minmax(0, 7rem)); gap: var(--size-4-2); }
 .bookbinder-style-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
 @container (max-width: 32rem) {
@@ -133,13 +144,18 @@
 .bookbinder-toolbar input[type="number"] { appearance: textfield; }
 .bookbinder-toolbar input[type="number"]::-webkit-inner-spin-button, .bookbinder-toolbar input[type="number"]::-webkit-outer-spin-button { appearance: none; margin: 0; }
 .bookbinder-toolbar-field[data-unit] input { padding-right: 2.5em; font-variant-numeric: tabular-nums; }
-.bookbinder-toolbar-field[data-unit]::after { content: attr(data-unit); position: absolute; right: var(--size-4-2); bottom: var(--size-4-3); color: var(--text-muted); font-size: var(--font-smallest); pointer-events: none; }
+.bookbinder-toolbar-field[data-unit]::after { content: attr(data-unit); position: absolute; right: var(--size-4-2); bottom: calc((var(--input-height, 28px) - 1lh) / 2); color: var(--text-muted); font-size: var(--font-smallest); pointer-events: none; }
 .bookbinder-toolbar button[aria-pressed="true"] { background: var(--interactive-accent); color: var(--text-on-accent); }
-.bookbinder-toolbar button, .bookbinder-toolbar input:not([type="checkbox"]), .bookbinder-toolbar select { min-height: 44px; }
-.bookbinder-toolbar button { min-width: 44px; }
-.bookbinder-toolbar button.clickable-icon { position: relative; flex: none; width: 44px; height: 44px; overflow: hidden; }
+.bookbinder-toolbar button, .bookbinder-toolbar input:not([type="checkbox"]), .bookbinder-toolbar select { height: var(--input-height, 28px); }
+.bookbinder-toolbar button { min-width: var(--input-height, 28px); }
+.bookbinder-toolbar button.clickable-icon { position: relative; flex: none; width: var(--input-height, 28px); height: var(--input-height, 28px); overflow: hidden; }
 .bookbinder-toolbar button[data-auto="true"]::after { content: ""; position: absolute; right: 4px; bottom: 4px; width: 4px; height: 4px; border-radius: 50%; background: var(--text-muted); }
 .bookbinder-toolbar input[type="checkbox"] { margin-block: var(--size-4-3); }
+
+.bookbinder-character-options > .bookbinder-color-palette { flex: none; min-width: var(--input-height, 28px); }
+.bookbinder-toolbar input.bookbinder-color-swatch { width: var(--input-height, 28px); height: var(--input-height, 28px); padding: var(--size-4-1); border-radius: 50%; cursor: pointer; }
+.bookbinder-color-swatch::-webkit-color-swatch-wrapper { padding: 0; }
+.bookbinder-color-swatch::-webkit-color-swatch { border: 0; border-radius: 50%; }
 
 .bookbinder-preview {
 	box-sizing: border-box;
@@ -152,6 +168,7 @@
 }
 
 .bookbinder-style-help { margin-block: var(--size-4-2); }
+.bookbinder-font-warning { color: var(--text-error); margin: 0; font-size: var(--font-small); }
 .bookbinder-preview-heading { display: flex; justify-content: space-between; gap: var(--size-4-2); color: var(--text-muted); font-size: var(--font-small); margin-bottom: var(--size-4-2); }
 .bookbinder-preview-heading span:last-child { color: var(--text-normal); font-weight: var(--font-semibold); }
 
@@ -161,7 +178,7 @@
 	display: flex;
 	justify-content: flex-end;
 	gap: var(--size-4-2);
-	padding-top: var(--size-4-4);
+	padding-top: var(--size-4-2);
 }
 
 .nav-files-container .nav-file-title[data-path$=".epub" i],
@@ -177,3 +194,8 @@
 	color: var(--text-accent);
 }
 
+.bookbinder-font-catalog { margin-top: 0.6em; }
+.bookbinder-font-catalog summary { cursor: pointer; }
+.bookbinder-font-family { margin: 0.4em 0; }
+.bookbinder-font-family p { margin: 0.4em 0; overflow-wrap: anywhere; }
+.bookbinder-font-family a + a { margin-inline-start: 1em; }

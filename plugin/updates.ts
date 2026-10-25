@@ -1,3 +1,4 @@
+import { t } from "./i18n.ts";
 import * as timers from "node:timers";
 import { realpath } from "node:fs/promises";
 import { compareVersions, type Tool, type ToolStatus } from "./tools.ts";
@@ -53,7 +54,7 @@ export async function checkUpdate(tool: Tool, status: ToolStatus, read: (url: st
 			read(endpoint),
 			new Promise<string>((_, reject) => { timer = timers.setTimeout(() => reject(new Error("Timeout")), 8000); }),
 		]);
-		if (text.length > 1_000_000) throw new Error("Réponse trop volumineuse");
+		if (text.length > 1_000_000) throw new Error(t("responseTooLarge"));
 		let published: string | undefined;
 		if (source === "texlive") {
 			const plain = text.replace(/<!--[\s\S]*?-->/g, "").replace(/<[^>]*>/g, " ").replace(/&nbsp;|&#160;/g, " ");
@@ -70,20 +71,20 @@ export async function checkUpdate(tool: Tool, status: ToolStatus, read: (url: st
 				}
 			}
 		}
-		if (!published || compareVersions(published, published) !== 0) throw new Error("Version inconnue");
-		const download = tool === "xelatex" ? "Page officielle de téléchargement"
-			: /\.(?:pkg|msi|exe)$/.test(url) ? "Télécharger l’installateur" : "Voir les installateurs";
-		if (status.state !== "found") return { state: "install", message: `Version disponible : ${published}.`, url, action: download };
+		if (!published || compareVersions(published, published) !== 0) throw new Error(t("unknownVersion"));
+		const download = tool === "xelatex" ? t("officialDownloadPage")
+			: /\.(?:pkg|msi|exe)$/.test(url) ? t("downloadInstaller") : t("viewInstallers");
+		if (status.state !== "found") return { state: "install", message: t("versionVersionIsAvailable", { version: published }), url, action: download };
 		const installed = tool === "pandoc" ? status.version : status.version.match(/^(?:TeX Live|MiKTeX)\s+(\d+(?:\.\d+)*)\b/)?.[1];
 		const comparison = installed ? compareVersions(installed, published) : undefined;
-		if (comparison === undefined) throw new Error("Version installée inconnue");
-		if (comparison < 0) return { state: "update", message: `${source === "texlive" ? "Version annuelle" : "Version"} ${published} disponible.${source === "miktex" ? " Ouvrez MiKTeX Console puis Updates." : ""}`,
-			url, action: source === "miktex" ? "Guide de MiKTeX Console" : download };
+		if (comparison === undefined) throw new Error(t("unknownInstalledVersion"));
+		if (comparison < 0) return { state: "update", message: t(source === "miktex" ? "miktexUpdateAvailable" : source === "texlive" ? "annualVersionVersionIsAvailable" : "versionVersionIsAvailable", { version: published }),
+			url, action: source === "miktex" ? t("miktexConsoleGuide") : download };
 		return { state: comparison === 0 ? "current" : "newer", message: comparison === 0
-			? `À jour (${source === "texlive" ? "version annuelle " : ""}${published}).`
-			: `Version installée plus récente que la version publiée (${published}).` };
+			? t(source === "texlive" ? "upToDateAnnualVersionVersion" : "upToDateVersion", { version: published })
+			: t("theInstalledVersionIsNewerThanThePublishedVersionVersion", { version: published }) };
 	} catch {
-		return { state: "unavailable", message: "Comparaison en ligne indisponible. Le site officiel reste accessible.", url, action: "Ouvrir le site officiel" };
+		return { state: "unavailable", message: t("onlineComparisonUnavailable"), url, action: t("openOfficialWebsite") };
 	} finally {
 		timers.clearTimeout(timer);
 	}

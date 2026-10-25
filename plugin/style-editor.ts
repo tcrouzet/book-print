@@ -1,5 +1,6 @@
-import { fontFamily, projectCss, type Presentation } from "./presentation";
-import { bookStyles, contextRules, type BookStyle } from "./book-styles";
+import { getLocale, t } from "./i18n.ts";
+import { fontFamily, fontFilename, projectCss, type Presentation } from "./presentation";
+import { bookStyles, contextRules, sortedBookStyles, type BookStyle } from "./book-styles";
 import { mountProjectTabs } from "./project-tabs";
 
 interface StyleEditorOptions {
@@ -16,6 +17,7 @@ export class StyleEditor {
 	private toolbar: HTMLElement;
 	private selected = "p";
 	private section = 0;
+	private separatorCharacters: string;
 	private previewLabel: HTMLElement;
 	private rules?: HTMLStyleElement;
 	private base?: HTMLStyleElement;
@@ -27,9 +29,11 @@ export class StyleEditor {
 
 	constructor(container: HTMLElement, readonly presentation: Presentation, private css: string, private changed: () => void, private requestClose: (() => void) | undefined, private options: StyleEditorOptions) {
 		this.makeEl = options.createEl ?? createEl;
+		this.separatorCharacters = presentation.separator ?? "⁂";
 		presentation.page ??= {};
 		presentation.styles ??= {};
 		presentation.rules ??= {};
+		presentation.disabledRules ??= [];
 		if (options.rules) this.selected = contextRules[0].selector;
 		const legacyMargin = presentation.style["page-margin"];
 		if (legacyMargin !== undefined) {
@@ -39,18 +43,18 @@ export class StyleEditor {
 		this.toolbar = this.makeEl("div");
 		this.toolbar.className = "bookbinder-toolbar";
 		this.toolbar.setAttribute("role", "group");
-		this.toolbar.setAttribute("aria-label", "Mise en forme des styles du livre");
+		this.toolbar.setAttribute("aria-label", t("bookStyleFormatting"));
 		container.append(this.toolbar);
 		const description = this.makeEl("p");
 		description.className = "bookbinder-style-help";
-		description.textContent = "Auto reprend le modèle. Effacez une valeur pour rétablir ses réglages.";
+		description.textContent = t("autoUsesTheTemplateClearAValueToRestoreItsSettings");
 		container.append(description);
 		const previewHeading = this.makeEl("div"); previewHeading.className = "bookbinder-preview-heading";
-		const previewTitle = this.makeEl("span"); previewTitle.textContent = "Aperçu"; previewHeading.append(previewTitle);
+		const previewTitle = this.makeEl("span"); previewTitle.textContent = t("preview"); previewHeading.append(previewTitle);
 		this.previewLabel = this.makeEl("span"); previewHeading.append(this.previewLabel); container.append(previewHeading);
 		this.frame = this.makeEl("iframe");
 		this.frame.className = "bookbinder-preview";
-		this.frame.title = "Aperçu de la présentation du livre";
+		this.frame.title = t("bookPresentationPreview");
 		this.frame.setAttribute("sandbox", "allow-same-origin");
 		this.ready = new Promise(resolve => {
 			this.finishReady = resolve;
@@ -65,11 +69,11 @@ export class StyleEditor {
 				this.rules = this.makeEl("style");
 				preview.head.append(this.rules);
 				for (const [tag, text] of [
-					["h1", "Une nouvelle histoire"], ["h2", "Au commencement"],
-					["p", "Au petit matin, la lumière glissait entre les rideaux. Sur la table, un livre attendait encore son lecteur."],
-					["p", "Chaque page possède son rythme. Les titres, les blancs et la typographie accompagnent le texte et donnent envie de poursuivre la lecture."],
-					["h3", "Un matin de printemps"], ["p", "Elle ouvrit la fenêtre. La ville s’éveillait lentement, avec ce calme particulier qui précède les grandes journées."],
-					["h4", "Exergue"], ["h5", "Une voix lointaine"], ["h6", "Le dernier mot"],
+					["h1", t("aNewStory")], ["h2", t("atTheBeginning")],
+					["p", t("previewOpeningParagraph")],
+					["p", t("previewSecondParagraph")],
+					["h3", t("aSpringMorning")], ["p", t("previewThirdParagraph")],
+					["h4", t("epigraph")], ["h5", t("aDistantVoice")], ["h6", t("theLastWord")],
 				] as const) {
 					const element = this.makeEl(tag);
 					element.textContent = text;
@@ -77,18 +81,21 @@ export class StyleEditor {
 					element.dataset.bookStyle = tag;
 					element.tabIndex = 0;
 					element.setAttribute("role", "button");
-					element.setAttribute("aria-label", tag === "p" ? "Modifier le style Texte courant" : `Modifier le style Titre ${tag.slice(1)}`);
+					element.setAttribute("aria-label", tag === "p" ? t("editBodyTextStyle") : t("editHeadingLevelStyle", { level: tag.slice(1) }));
 					const select = () => { this.selected = tag; this.update(); this.renderToolbar(); };
 					element.addEventListener("click", select);
 					element.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(); } });
 					}
-					preview.body.append(element);
+					if (tag === "p" && /^H[1-6]$/.test(preview.body.lastElementChild?.tagName ?? "")) {
+						const paragraph = this.makeEl("div"); paragraph.className = "bookbinder-after-heading-body";
+						preview.body.append(paragraph, element);
+					} else preview.body.append(element);
 				}
 				if (this.relativeUnits) for (const style of this.catalog.filter(style => style.sample)) {
 					const wrapper = this.options.sanitizeHTMLToDom(style.sample!);
 					const element = wrapper.querySelector<HTMLElement>(style.target ?? style.selector)!;
 					element.dataset.bookStyle = style.selector;
-					element.tabIndex = 0; element.setAttribute("role", "button"); element.setAttribute("aria-label", "Modifier le style " + style.label);
+					element.tabIndex = 0; element.setAttribute("role", "button"); element.setAttribute("aria-label", t("editStyleStyle", { style: style.label }));
 					const select = (event: Event) => { event.preventDefault(); this.selected = style.selector; this.update(); this.renderToolbar(); };
 					element.addEventListener("click", select);
 					element.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") select(event); });
@@ -100,7 +107,7 @@ export class StyleEditor {
 				resolve();
 			}, { once: true });
 		});
-		this.frame.srcdoc = '<!doctype html><html lang="fr"><head><meta charset="utf-8"></head><body></body></html>';
+		this.frame.srcdoc = `<!doctype html><html lang="${getLocale()}"><head><meta charset="utf-8"></head><body></body></html>`;
 		container.append(this.frame);
 	}
 
@@ -111,7 +118,7 @@ export class StyleEditor {
 		if (previous?.length === data.length && previous.every((value, index) => value === data[index])) return;
 		const face = new FontFace(fontFamily(filename), new Uint8Array(data).buffer);
 		try { await face.load(); }
-		catch { throw new Error(`La police ${filename.split(/[/\\]/).pop()} ne peut pas être chargée. Choisissez un fichier de police valide.`); }
+		catch { throw new Error(t("theFontFontCouldNotBeLoadedChooseAValidFontFile", { font: fontFilename(filename) })); }
 		if (this.disposed) return;
 		for (const existing of this.frame.contentDocument!.fonts) if (existing.family === fontFamily(filename)) this.frame.contentDocument!.fonts.delete(existing);
 		this.frame.contentDocument!.fonts.add(face);
@@ -126,6 +133,8 @@ export class StyleEditor {
 		this.updateBase();
 		this.update(); this.renderToolbar();
 	}
+
+	refreshFonts(): void { this.updateBase(); this.refresh(); }
 
 	async mountPage(container: HTMLElement): Promise<void> {
 		await this.ready;
@@ -152,12 +161,12 @@ export class StyleEditor {
 		const computed = this.frame.contentWindow!.getComputedStyle(this.frame.contentDocument!.body);
 		const unit = this.relativeUnits ? "em" : "mm";
 		const basis = this.relativeUnits ? parseFloat(this.frame.contentWindow!.getComputedStyle(this.frame.contentDocument!.documentElement).fontSize) : 96 / 25.4;
-		for (const [side, titleText] of [["top", "Marge haute de page"], ["bottom", "Marge basse de page"], ["left", "Marge gauche de page"], ["right", "Marge droite de page"]]) {
-			const label = titleText + " (" + unit + ")";
+		for (const [side, titleText] of [["top", t("topPageMargin")], ["bottom", t("bottomPageMargin")], ["left", t("leftPageMargin")], ["right", t("rightPageMargin")]]) {
+			const label = t("labelUnit", { label: titleText, unit });
 			const name = "margin-" + side;
 			const wrapper = this.makeEl("label"); wrapper.className = "bookbinder-page-field";
 			const title = this.makeEl("span"); title.textContent = label; wrapper.append(title);
-			const input = this.makeEl("input"); input.type = "number"; input.step = "any"; input.min = "0"; input.max = "300"; input.placeholder = "Auto";
+			const input = this.makeEl("input"); input.type = "number"; input.step = "any"; input.min = "0"; input.max = "300"; input.placeholder = t("auto");
 			input.setAttribute("aria-label", label);
 			const raw = this.presentation.page![name];
 			input.value = raw === undefined ? "" : this.relativeUnits && /^-?[\d.]+em$/.test(String(raw)) ? String(parseFloat(String(raw))) : String(Number((parseFloat(computed.getPropertyValue("padding-" + side)) / basis).toFixed(4)));
@@ -193,7 +202,10 @@ export class StyleEditor {
 	}
 
 	private get relativeUnits(): boolean { return !this.options.format || this.options.format === "epub"; }
-	private get catalog(): BookStyle[] { return this.options.rules ? contextRules : this.relativeUnits ? bookStyles : bookStyles.filter(style => !style.sample); }
+	private get catalog(): BookStyle[] {
+		if (this.options.rules) return contextRules;
+		return this.relativeUnits ? sortedBookStyles() : bookStyles.filter(style => !style.sample);
+	}
 
 	private values(selector = this.selected): Record<string, string | number> {
 		if (selector === "p") return this.presentation.style;
@@ -206,10 +218,9 @@ export class StyleEditor {
 		return this.frame.contentDocument!.querySelector<HTMLElement>('[data-book-style="' + selector + '"]')!;
 	}
 
-	private emValue(property: string, selector = this.selected): number {
+	private emValue(property: string, selector = this.selected, sample = this.sample(selector)): number {
 		const raw = this.values(selector)[property];
 		if (typeof raw === "string" && /^-?[\d.]+em$/.test(raw)) return parseFloat(raw);
-		const sample = this.sample(selector);
 		const window = this.frame.contentWindow!;
 		const pseudo = this.catalog.find(style => style.selector === selector)?.pseudo;
 		const computed = window.getComputedStyle(sample, pseudo);
@@ -222,6 +233,7 @@ export class StyleEditor {
 		for (const style of this.catalog) {
 			const values = this.values(style.selector);
 			for (const [name, value] of Object.entries(values)) {
+				if (name === "margin-top" && values["page-position"] === "one-third") continue;
 				if (["font-size", "line-height", "text-indent", "margin-top", "margin-bottom", "margin-left", "margin-right", "letter-spacing"].includes(name)
 					&& /^-?[\d.]+(?:pt|px|mm|cm|in|pc|rem)$/.test(String(value))) values[name] = Number(this.emValue(name, style.selector).toFixed(6)) + "em";
 				if (name === "line-height" && /^\d+(?:\.\d+)?$/.test(String(value))) values[name] = value + "em";
@@ -245,7 +257,7 @@ export class StyleEditor {
 			if (source.startsWith("data:")) return face;
 			let name: string;
 			try { name = decodeURIComponent(source.split(/[/\\]/).pop()!); } catch { return ""; }
-			const entry = Array.from(this.fonts).find(([filename]) => filename.split(/[/\\]/).pop() === name);
+			const entry = Array.from(this.fonts).find(([filename]) => fontFilename(filename) === name);
 			if (!entry) return "";
 			let binary = ""; for (const byte of entry[1]) binary += String.fromCharCode(byte);
 			const format = name.split(".").pop()!.toLowerCase();
@@ -267,17 +279,32 @@ export class StyleEditor {
 
 	private update(): void {
 		if (!this.rules) return;
-		this.previewLabel.textContent = this.catalog.find(style => style.selector === this.selected)?.label ?? this.selected;
+		const selected = this.catalog.find(style => style.selector === this.selected);
+		this.previewLabel.textContent = this.options.rules && this.presentation.disabledRules!.includes(selected!.kind!) ? t("noRule") : selected?.label ?? this.selected;
 		const accent = this.toolbar.ownerDocument.defaultView!.getComputedStyle(this.toolbar).getPropertyValue("--text-accent") || "Highlight";
 		const page = this.presentation.page ?? {};
 		// @page inherits its font from the root; preview padding must use the same reference.
 		const padding = ["top", "right", "bottom", "left"].map(side => String(page["margin-" + side] ?? "1.2em").replace(/^(-?[\d.]+)em$/, "$1rem")).join(" ");
-		this.rules.textContent = `html{color:#222;background:white}body{margin:0;padding:${padding}}
+		this.rules.textContent = `html{color:black;background:white}body{margin:0;padding:${padding}}
+			.bookbinder-separator-line{border-top:1px solid}
 			[data-book-style]{cursor:pointer}[data-book-style]:focus-visible{outline:2px solid ${accent};outline-offset:4px}
 			.bookbinder-selected{outline:2px solid ${accent};outline-offset:4px}
 			.bookbinder-preview-visible{display:block!important}
 			${projectCss(this.presentation).replace(/@font-face\s*\{[^}]*\}/g, "")}`;
 		const preview = this.frame.contentDocument!;
+		const separator = preview.querySelector<HTMLElement>('[data-book-style="hr"]');
+		if (separator) {
+			separator.textContent = this.presentation.separator ?? "";
+			separator.classList.toggle("bookbinder-separator-line", this.presentation.separator === undefined);
+		}
+		for (const rule of contextRules.filter(rule => !rule.pseudo)) {
+			const active = "bookbinder-after-heading-" + rule.kind;
+			const inactive = "bookbinder-disabled-heading-" + rule.kind;
+			const disabled = this.presentation.disabledRules!.includes(rule.kind!);
+			for (const marker of preview.querySelectorAll("." + active + ",." + inactive)) {
+				marker.classList.toggle(active, !disabled); marker.classList.toggle(inactive, disabled);
+			}
+		}
 		// Hidden export styles stay visible in the editor so they can be selected.
 		for (const element of [preview.body, ...preview.querySelectorAll<HTMLElement>("[data-book-style]")]) {
 			element.classList.remove("bookbinder-preview-visible");
@@ -293,32 +320,35 @@ export class StyleEditor {
 		const focused = this.toolbar.contains(document.activeElement) ? document.activeElement?.getAttribute("aria-label") : null;
 		this.toolbar.replaceChildren();
 		const header = this.makeEl("div"); header.className = "bookbinder-style-header"; this.toolbar.append(header);
+		if (this.options.rules) header.classList.add("bookbinder-rule-header");
 		const navigation = this.makeEl("div"); navigation.className = "bookbinder-inspector-tabs";
-		navigation.setAttribute("aria-label", "Catégories du style"); this.toolbar.append(navigation);
-		const panels = ["Caractère", "Paragraphe", "Enchaînement"].map(() => {
+		navigation.setAttribute("aria-label", t("styleCategories")); this.toolbar.append(navigation);
+		const panels = [t("character"), t("paragraph"), t("flow")].map(() => {
 			const panel = this.makeEl("div"); panel.className = "bookbinder-inspector-panel"; this.toolbar.append(panel); return panel;
 		});
-		const selectSection = mountProjectTabs(navigation, panels, ["Caractère", "Paragraphe", "Enchaînement"], () => { this.section = panels.findIndex(panel => !panel.hidden); }, this.makeEl);
+		const selectSection = mountProjectTabs(navigation, panels, [t("character"), t("paragraph"), t("flow")], () => { this.section = panels.findIndex(panel => !panel.hidden); }, this.makeEl);
 		selectSection(this.section);
 		const row = (parent: HTMLElement, className: string) => {
 			const element = this.makeEl("div"); element.className = className; parent.append(element); return element;
 		};
 		const type = row(panels[0], "bookbinder-character-main");
 		const character = row(panels[0], "bookbinder-character-options");
-		const emphasis = row(character, "bookbinder-style-emphasis"); emphasis.setAttribute("role", "group"); emphasis.setAttribute("aria-label", "Graisse et italique");
+		const emphasis = row(character, "bookbinder-style-emphasis"); emphasis.setAttribute("role", "group"); emphasis.setAttribute("aria-label", t("weightAndItalic"));
 		const paragraph = row(panels[1], "bookbinder-paragraph-main");
 		const alignField = row(paragraph, "bookbinder-toolbar-field");
-		const alignLabel = this.makeEl("span"); alignLabel.textContent = "Alignement"; alignField.append(alignLabel);
-		const alignment = row(alignField, "bookbinder-style-alignment"); alignment.setAttribute("role", "group"); alignment.setAttribute("aria-label", "Alignement du paragraphe");
+		const alignLabel = this.makeEl("span"); alignLabel.textContent = t("alignment"); alignField.append(alignLabel);
+		const alignment = row(alignField, "bookbinder-style-alignment"); alignment.setAttribute("role", "group"); alignment.setAttribute("aria-label", t("paragraphAlignment"));
 		const margins = row(panels[1], "bookbinder-style-margins");
 		panels[2].classList.add("bookbinder-style-flow");
 		const sample = this.sample();
+		const heading = /^h[1-6]$/.test(this.selected) || this.selected === "h1.title";
+		const positionedHeading = this.relativeUnits && heading && this.values()["page-position"] === "one-third";
 		const computed = this.frame.contentWindow!.getComputedStyle(sample, this.catalog.find(style => style.selector === this.selected)?.pseudo);
 		const field = (parent: HTMLElement, label: string) => {
 			const wrapper = this.makeEl("label"); wrapper.className = "bookbinder-toolbar-field";
 			const unit = label.match(/ \((em|pt)\)$/)?.[1];
 			if (unit) wrapper.dataset.unit = unit;
-			const names: Record<string, string> = { "Espacement des caractères": "Approche", "Marge haute": "Haut", "Marge basse": "Bas", "Marge gauche": "Gauche", "Marge droite": "Droite" };
+			const names: Record<string, string> = { [t("characterSpacing")]: t("tracking"), [t("topMargin")]: t("top"), [t("bottomMargin")]: t("bottom"), [t("leftMargin")]: t("left"), [t("rightMargin")]: t("right") };
 			const title = label.replace(/ \((em|pt)\)$/, "");
 			const name = this.makeEl("span"); name.textContent = names[title] ?? title; wrapper.append(name);
 			parent.append(wrapper); return wrapper;
@@ -328,16 +358,56 @@ export class StyleEditor {
 			for (const [value, text] of Object.entries(options)) { const option = this.makeEl("option"); option.value = value; option.textContent = text; input.append(option); }
 			if (!(current in options)) { const option = this.makeEl("option"); option.value = current; option.textContent = current; input.append(option); }
 			input.value = current; input.addEventListener("change", () => change(input.value)); field(parent, label).append(input);
+			return input;
 		};
-		select(header, this.options.rules ? "Règle" : "Style", Object.fromEntries(this.catalog.map(style => [style.selector, style.label])), this.selected, value => {
-			this.selected = value; this.update(); this.renderToolbar(); this.reveal();
+		const currentRule = this.catalog.find(style => style.selector === this.selected)!;
+		if (this.options.rules) select(header, t("paragraphStyle"), Object.fromEntries(sortedBookStyles().filter(style => contextRules.some(rule => rule.paragraph === style.selector)).map(style => [style.selector, style.label])), currentRule.paragraph!, value => {
+			this.selected = contextRules.find(rule => rule.paragraph === value && rule.pseudo === currentRule.pseudo)!.selector;
+			this.update(); this.renderToolbar(); this.reveal();
 		});
-		const families: Record<string, string> = { "": "Auto", serif: "Serif", "sans-serif": "Sans serif", monospace: "Monospace" };
-		for (const filename of new Set([...this.presentation.fonts, ...this.fonts.keys()])) families[fontFamily(filename)] = filename.split(/[/\\]/).pop()!;
-		select(type, "Police", families, String(this.values()["font-family"] ?? ""), value => this.set("font-family", value || undefined));
+		const choices = this.options.rules ? this.catalog.filter(rule => rule.paragraph === currentRule.paragraph) : this.catalog;
+		const disabled = this.options.rules && this.presentation.disabledRules!.includes(currentRule.kind!);
+		select(header, this.options.rules ? t("rule") : t("style"), { ...(this.options.rules ? { "": t("noRule") } : {}), ...Object.fromEntries(choices.map(style => [style.selector, style.label])) }, disabled ? "" : this.selected, value => {
+			if (this.options.rules) {
+				this.presentation.disabledRules = this.presentation.disabledRules!.filter(kind => kind !== currentRule.kind);
+				if (!value) this.presentation.disabledRules.push(currentRule.kind!);
+				this.changed();
+			}
+			if (value) this.selected = value;
+			this.update(); this.renderToolbar(); this.reveal();
+		});
+		if (disabled) {
+			navigation.remove(); panels.forEach(panel => panel.remove());
+			if (focused) Array.from(header.querySelectorAll<HTMLElement>("[aria-label]")).find(element => element.getAttribute("aria-label") === focused)?.focus();
+			return;
+		}
+		if (this.relativeUnits && this.selected === "hr") {
+			select(header, t("separatorAppearance"), { line: t("line"), characters: t("characters") }, this.presentation.separator === undefined ? "line" : "characters", value => {
+				if (value === "line") delete this.presentation.separator;
+				else this.presentation.separator = this.separatorCharacters;
+				this.changed(); this.update(); this.renderToolbar();
+			});
+			if (this.presentation.separator !== undefined) {
+				const input = this.makeEl("input"); input.type = "text"; input.value = this.presentation.separator;
+				input.setAttribute("aria-label", t("separatorCharacters"));
+				input.addEventListener("input", () => {
+					this.separatorCharacters = input.value; this.presentation.separator = input.value;
+					this.changed(); this.update();
+				});
+				field(header, t("separatorCharacters")).append(input);
+			}
+		}
+		const families: Record<string, string> = { "": t("auto"), serif: t("serif"), "sans-serif": t("sansSerif"), monospace: t("monospace") };
+		for (const filename of new Set([...this.presentation.fonts, ...this.fonts.keys()])) families[fontFamily(filename)] = fontFilename(filename);
+		select(type, t("font"), families, String(this.values()["font-family"] ?? ""), value => this.set("font-family", value || undefined));
+		if (this.relativeUnits && this.selected === "p" && !this.options.rules) {
+			const warning = this.makeEl("p"); warning.className = "bookbinder-font-warning";
+			warning.textContent = t("bodyFontWarning"); panels[0].append(warning);
+		}
 		const number = (parent: HTMLElement, label: string, property: string, effective: number, minimum: number, maximum: number, unit: string) => {
 			const input = this.makeEl("input"); input.type = "number"; input.min = String(minimum); input.max = String(maximum); input.step = "any";
-			input.placeholder = "Auto"; input.setAttribute("aria-label", label);
+			input.placeholder = t("auto"); input.setAttribute("aria-label", label);
+			input.disabled = positionedHeading && property === "margin-top";
 			input.value = this.values()[property] === undefined ? "" : String(Math.round(effective * 100) / 100);
 			input.addEventListener("input", () => {
 				if (!input.checkValidity()) return;
@@ -348,42 +418,46 @@ export class StyleEditor {
 		const points = (property: string) => (parseFloat(computed.getPropertyValue(property)) || 0) * 0.75;
 		const unit = this.relativeUnits ? "em" : "pt";
 		const length = (property: string) => this.relativeUnits ? this.emValue(property) : points(property);
-		number(type, "Corps (" + unit + ")", "font-size", length("font-size"), this.relativeUnits ? 0.1 : 1, this.relativeUnits ? 20 : 200, unit);
+		number(type, t("fontSizeUnit", { unit }), "font-size", length("font-size"), this.relativeUnits ? 0.1 : 1, this.relativeUnits ? 20 : 200, unit);
 		const button = (parent: HTMLElement, label: string, icon: string, active: boolean | "mixed" | undefined, action: () => void) => {
-			const input = this.makeEl("button"); input.type = "button"; input.className = "clickable-icon"; input.title = label + (active === "mixed" ? " : Auto" : "");
+			const input = this.makeEl("button"); input.type = "button"; input.className = "clickable-icon"; input.title = active === "mixed" ? t("labelAuto", { label }) : label;
 			if (this.options.setIcon) this.options.setIcon(input, icon); else input.textContent = label;
 			input.setAttribute("aria-label", label); if (active !== undefined) input.setAttribute("aria-pressed", String(active));
 			if (active === "mixed") input.dataset.auto = "true";
 			input.addEventListener("click", () => { action(); this.renderToolbar(); }); parent.append(input);
 		};
-		for (const [property, on, label, icon] of [["font-weight", "bold", "Gras", "bold"], ["font-style", "italic", "Italique", "italic"]]) {
+		for (const [property, on, label, icon] of [["font-weight", "bold", t("bold"), "bold"], ["font-style", "italic", t("italic"), "italic"]]) {
 			const current = this.values()[property];
 			const active = current === on || property === "font-weight" && Number(current) >= 600;
 			button(emphasis, label, icon, current === undefined ? "mixed" : active, () => this.set(property, current === undefined ? on : active ? "normal" : undefined));
 		}
-		button(alignment, "Alignement automatique", "rotate-ccw", this.values()["text-align"] === undefined, () => this.set("text-align", undefined));
-		for (const [value, label] of [["left", "Gauche"], ["center", "Centré"], ["right", "Droite"], ["justify", "Justifié"]]) {
-			button(alignment, "Aligner : " + label, "align-" + value, this.values()["text-align"] === value, () => this.set("text-align", value));
+		button(alignment, t("automaticAlignment"), "rotate-ccw", this.values()["text-align"] === undefined, () => this.set("text-align", undefined));
+		for (const [value, label] of [["left", t("left")], ["center", t("centred")], ["right", t("right")], ["justify", t("justified")]]) {
+			button(alignment, t("alignAlignment", { alignment: label }), "align-" + value, this.values()["text-align"] === value, () => this.set("text-align", value));
 		}
-		const color = this.makeEl("input"); color.type = "color"; color.setAttribute("aria-label", "Couleur du texte");
+		const color = this.makeEl("input"); color.type = "color"; color.setAttribute("aria-label", t("textColour"));
+		color.classList.add("bookbinder-color-swatch"); color.title = t("chooseAColour");
 		const rgb = computed.color.match(/\d+/g)?.slice(0, 3).map(Number) ?? [0, 0, 0];
 		color.value = "#" + rgb.map(value => Math.min(255, value).toString(16).padStart(2, "0")).join("");
 		const colorValue = this.values().color;
-		select(character, "Couleur", { "": "Auto", custom: "Personnalisée", transparent: "Invisible" }, colorValue === undefined ? "" : colorValue === "transparent" ? "transparent" : "custom", value => {
+		const colorMode = select(character, t("colour"), { "": t("auto"), custom: t("custom"), transparent: t("invisible") }, colorValue === undefined ? "" : colorValue === "transparent" ? "transparent" : "custom", value => {
 			this.set("color", value === "" ? undefined : value === "transparent" ? "transparent" : color.value); this.renderToolbar();
 		});
-		if (colorValue !== undefined && colorValue !== "transparent") {
-			color.addEventListener("input", () => this.set("color", color.value)); field(character, "Couleur personnalisée").append(color);
-		}
+		color.addEventListener("input", () => { this.set("color", color.value); colorMode.value = "custom"; });
+		const palette = field(character, t("palette")); palette.classList.add("bookbinder-color-palette"); palette.append(color);
 		const size = parseFloat(computed.fontSize) || 16;
-		number(type, this.relativeUnits ? "Interligne (em)" : "Interligne", "line-height", (parseFloat(computed.lineHeight) || size * 1.2) / size, 0.5, 5, this.relativeUnits ? "em" : "");
-		for (const [property, label] of [["margin-top", "Marge haute"], ["margin-bottom", "Marge basse"], ["margin-left", "Marge gauche"], ["margin-right", "Marge droite"], ["text-indent", "Alinéa"]]) {
-			number(property === "text-indent" ? paragraph : margins, label + " (" + unit + ")", property, length(property), this.relativeUnits ? -100 : -300, this.relativeUnits ? 100 : 300, unit);
+		number(type, this.relativeUnits ? t("lineHeightEm") : t("lineHeight"), "line-height", (parseFloat(computed.lineHeight) || size * 1.2) / size, 0.5, 5, this.relativeUnits ? "em" : "");
+		for (const [property, label] of [["margin-top", t("topMargin")], ["margin-bottom", t("bottomMargin")], ["margin-left", t("leftMargin")], ["margin-right", t("rightMargin")], ["text-indent", t("firstLineIndent")]]) {
+			number(property === "text-indent" ? paragraph : margins, t("labelUnit", { label, unit }), property, length(property), this.relativeUnits ? -100 : -300, this.relativeUnits ? 100 : 300, unit);
 		}
-		if (this.relativeUnits) number(character, "Espacement des caractères (em)", "letter-spacing", this.emValue("letter-spacing"), -5, 5, "em");
-		select(panels[2], "Affichage", { "": "Auto", block: "Visible", none: "Masqué" }, this.values().display === undefined ? "" : this.values().display === "none" ? "none" : "block", value => this.set("display", value === "block" && ["SPAN", "A"].includes(sample.tagName) ? "inline" : value || undefined));
-		select(panels[2], "Saut de page avant", { "": "Auto", always: "Oui", auto: "Non" }, String(this.values()["page-break-before"] ?? ""), value => this.set("page-break-before", value || undefined));
-		button(header, "Réinitialiser ce style", "rotate-ccw", undefined, () => {
+		if (this.relativeUnits) number(character, t("characterSpacingEm"), "letter-spacing", this.emValue("letter-spacing"), -5, 5, "em");
+		select(panels[2], t("display"), { "": t("auto"), block: t("visible"), none: t("hidden") }, this.values().display === undefined ? "" : this.values().display === "none" ? "none" : "block", value => this.set("display", value === "block" && ["SPAN", "A"].includes(sample.tagName) ? "inline" : value || undefined));
+		if (this.relativeUnits && heading) select(panels[2], t("headingPosition"), { "": t("auto"), "one-third": t("oneThirdPage") }, String(this.values()["page-position"] ?? ""), value => {
+			this.set("page-position", value || undefined); this.renderToolbar();
+		});
+		select(panels[2], t("pageBreakBefore"), { "": t("auto"), always: t("yes"), auto: t("no") }, positionedHeading ? "always" : String(this.values()["page-break-before"] ?? ""), value => this.set("page-break-before", value || undefined)).disabled = positionedHeading;
+		button(header, t("resetThisStyle"), "rotate-ccw", undefined, () => {
+			if (this.selected === "hr") delete this.presentation.separator;
 			if (this.selected === "p") this.presentation.style = {};
 			else if (/^h[1-6]$/.test(this.selected)) delete this.presentation.headings[this.selected];
 			else if (this.options.rules) delete this.presentation.rules![this.selected];

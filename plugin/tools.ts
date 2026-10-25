@@ -1,3 +1,4 @@
+import { t } from "./i18n.ts";
 import { execFile } from "node:child_process";
 import { access, readdir } from "node:fs/promises";
 import { constants } from "node:fs";
@@ -77,23 +78,23 @@ async function checkExecutable(tool: Tool, executable: string): Promise<ToolStat
 			if (error) {
 				const code = (error as NodeJS.ErrnoException).code;
 				resolve({ state: "error", path: executable, message: error.killed
-					? "Le programme ne répond pas. Vérifiez son installation."
-					: code === "EACCES" ? "Le programme n’est pas autorisé à s’exécuter."
-					: "Le programme ne démarre pas correctement. Vérifiez son installation." });
+					? t("theProgramIsNotRespondingCheckItsInstallation")
+					: code === "EACCES" ? t("theProgramIsNotAllowedToRun")
+					: t("theProgramCouldNotStartCorrectlyCheckItsInstallation") });
 				return;
 			}
 			const version = versionOf(tool, stdout);
 			resolve(version ? { state: "found", path: executable, version }
 				: { state: "error", path: executable, message: tool === "pandoc"
-					? "Le fichier sélectionné ne correspond pas à Pandoc."
-					: "Le fichier sélectionné ne correspond pas à XeLaTeX." });
+					? t("theSelectedFileIsNotPandoc")
+					: t("theSelectedFileIsNotXelatex") });
 		});
 	});
 }
 
 export async function detectTool(tool: Tool, configuredPath = "", env = process.env): Promise<ToolStatus> {
 	let configured = configuredPath.trim().replace(/^(["'])(.*)\1$/, "$2");
-	if (configured.includes("\0")) return { state: "error", message: "Le chemin contient un caractère invalide." };
+	if (configured.includes("\0")) return { state: "error", message: t("thePathContainsAnInvalidCharacter") };
 	if (configured === "~" || configured.startsWith("~/")) configured = path.join(homedir(), configured.slice(2));
 	const command = configured || tool;
 	const name = process.platform === "win32" && !command.toLowerCase().endsWith(".exe") ? `${command}.exe` : command;
@@ -109,7 +110,7 @@ export async function detectTool(tool: Tool, configuredPath = "", env = process.
 			await access(executable, constants.F_OK);
 		} catch (error) {
 			if ((error as NodeJS.ErrnoException).code !== "ENOENT") failure ??= {
-				state: "error", path: executable, message: "Impossible d’accéder au programme. Vérifiez les autorisations.",
+				state: "error", path: executable, message: t("couldNotAccessTheProgramCheckPermissions"),
 			};
 			continue;
 		}
@@ -122,6 +123,6 @@ export async function detectTool(tool: Tool, configuredPath = "", env = process.
 		} else failure ??= result;
 	}
 	return newest ?? failure ?? { state: "missing", message: configured
-		? "Programme introuvable à cet emplacement. Corrigez le chemin ou rétablissez la détection automatique."
-		: "Programme non détecté. Installez-le, puis relancez la vérification." };
+		? t("programPathNotFound")
+		: t("programNotDetectedInstallItThenCheckAgain") };
 }

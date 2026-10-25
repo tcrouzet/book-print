@@ -1,10 +1,14 @@
-import { App, ButtonComponent, ExtraButtonComponent, FileSystemAdapter, PluginSettingTab, Setting, TextComponent, requestUrl, type SettingDefinitionItem } from "obsidian";
+import { t } from "./i18n.ts";
+import { App, ButtonComponent, ExtraButtonComponent, FileSystemAdapter, PluginSettingTab, Setting, TextComponent, parseYaml, requestUrl, stringifyYaml, type SettingDefinitionItem } from "obsidian";
 import type BookbinderPlugin from "./main";
 import { detectTool, type Tool, type ToolStatus } from "./tools";
 import { checkUpdate } from "./updates";
 import type { BookbinderSettings } from "./types";
-import { chooseOutputDirectory } from "./dialogs";
+import { chooseFiles, chooseOutputDirectory } from "./dialogs";
 import { openProjectEditor } from "./project-modal";
+import { cloneProjectFile } from "./project-clone";
+import { fontCatalog, mountFontCatalog } from "./font-catalog.ts";
+import { installFontPackage, isFontPackageInstalled, readFontPackage } from "./font-package.ts";
 
 export class BookbinderSettingTab extends PluginSettingTab {
 	private draft: BookbinderSettings;
@@ -18,28 +22,59 @@ export class BookbinderSettingTab extends PluginSettingTab {
 
 	getSettingDefinitions(): SettingDefinitionItem[] {
 		return [
-			{ type: "group", heading: "Projets", items: [
-				{ name: "Projet de livre", desc: "Choisissez un dossier pour définir un livre, sa présentation et ses polices. Un projet existant peut être modifié.", aliases: ["Créer", "Ouvrir", "Styles", "Polices"], render: setting => this.displayProject(setting) },
+			{ type: "group", heading: t("projects"), items: [
+				{ name: t("bookProject"), desc: t("projectSettingDescription"), aliases: [t("create"), t("open"), t("styles"), t("fonts")], render: setting => this.displayProject(setting) },
+				{ name: t("cloneAProject"), desc: t("cloneSettingDescription"), aliases: [t("copy"), t("duplicate")], render: setting => this.displayCloneProject(setting) },
 			] },
-			{ type: "group", heading: "Génération", items: [
-				{ name: "Dossier de génération", desc: "Par défaut : même dossier que le fichier Markdown source.", aliases: ["Export", "Destination", "Parcourir"], render: setting => this.displayOutputDirectory(setting) },
+			{ type: "group", heading: t("export"), items: [
+				{ name: t("outputFolder"), desc: t("defaultTheSameFolderAsTheMarkdownSourceFile"), aliases: ["Export", "Destination", t("browse")], render: setting => this.displayOutputDirectory(setting) },
 			] },
-			{ type: "group", heading: "Installation", items: [
-				{ name: "Pandoc", desc: "Pandoc produit les fichiers Word et EPUB.", render: setting => this.displayTool(setting, "pandoc") },
-				{ name: "LaTeX", desc: "LaTeX est également nécessaire pour les PDF.", aliases: ["XeLaTeX"], render: setting => this.displayTool(setting, "xelatex") },
-				{ name: "Chemins personnalisés", aliases: ["Chemin Pandoc", "Chemin XeLaTeX", "Vérifier l’installation", "Enregistrer et vérifier"], render: setting => this.displayCustomPaths(setting) },
+			{ type: "group", heading: t("fonts"), items: [
+				{ name: t("fontPackage"), desc: t("fontPackageDescription"), aliases: [t("fontPackageCatalog")], render: setting => this.displayFontPackage(setting) },
+			] },
+			{ type: "group", heading: t("installation"), items: [
+				{ name: "Pandoc", desc: t("pandocCreatesWordAndEpubFiles"), render: setting => this.displayTool(setting, "pandoc") },
+				{ name: "LaTeX", desc: t("latexIsAlsoRequiredForPdfFiles"), aliases: ["XeLaTeX"], render: setting => this.displayTool(setting, "xelatex") },
+				{ name: t("customPaths"), aliases: [t("pandocPath"), t("xelatexPath"), t("checkInstallation"), t("saveAndCheck")], render: setting => this.displayCustomPaths(setting) },
 			] },
 		];
 	}
 
+	private displayFontPackage(setting: Setting): void {
+		const status = setting.descEl.createDiv({ attr: { role: "status", "aria-live": "polite" } });
+		mountFontCatalog(setting.descEl);
+		setting.addButton(button => {
+			button.setButtonText(t("downloadFontPackage")).setDisabled(true);
+			const connected = () => status.isConnected;
+			void isFontPackageInstalled(this.plugin.fontDirectory).then(installed => {
+				if (!connected()) return;
+				button.setDisabled(installed).setButtonText(t(installed ? "fontPackageInstalled" : "downloadFontPackage"));
+			}).catch(error => { if (connected()) status.setText(error instanceof Error ? error.message : String(error)); });
+			button.onClick(async () => {
+				button.setDisabled(true); status.setText(t("installingFontPackage"));
+				try {
+					const data = await readFontPackage(this.plugin.fontPackageFile, async () => {
+						const response = await requestUrl({ url: fontCatalog.archive.url, throw: false });
+						if (response.status !== 200) throw new Error(t("fontPackageDownloadFailed", { status: response.status }));
+						return response.arrayBuffer;
+					});
+					await installFontPackage(this.plugin.fontDirectory, data);
+					if (connected()) { status.setText(t("fontPackageReady")); button.setButtonText(t("fontPackageInstalled")); }
+				} catch (error) {
+					if (connected()) { status.setText(error instanceof Error ? error.message : String(error)); button.setDisabled(false); }
+				}
+			});
+		});
+	}
+
 	private displayTool(setting: Setting, tool: Tool): () => void {
 		this.containerEl.addClass("bookbinder-settings");
-		const element = setting.descEl.createDiv({ text: "Recherche en cours…", attr: { role: "status", "aria-live": "polite" } });
+		const element = setting.descEl.createDiv({ text: t("searching"), attr: { role: "status", "aria-live": "polite" } });
 		this.statuses[tool] = element;
 		const generation = this.generation;
 		void detectTool(tool, this.plugin.settings[tool === "pandoc" ? "pandocPath" : "latexPath"])
 			.then(status => this.showStatus(element, status, tool, generation))
-			.catch(() => { if (generation === this.generation && element.isConnected) element.setText("Vérification impossible."); });
+			.catch(() => { if (generation === this.generation && element.isConnected) element.setText(t("couldNotCheckInstallation")); });
 		return () => { if (this.statuses[tool] === element) delete this.statuses[tool]; };
 	}
 
@@ -50,24 +85,24 @@ export class BookbinderSettingTab extends PluginSettingTab {
 		setting.infoEl.hidden = true;
 		setting.controlEl.hidden = true;
 		const advanced = setting.settingEl.createEl("details", { cls: "bookbinder-paths" });
-		advanced.createEl("summary", { text: "Chemins personnalisés" });
-		advanced.createEl("p", { text: "Laissez ces champs vides pour utiliser la détection automatique." });
+		advanced.createEl("summary", { text: t("customPaths") });
+		advanced.createEl("p", { text: t("leaveTheseFieldsEmptyToUseAutomaticDetection") });
 		for (const [key, label] of [["pandocPath", "Pandoc"], ["latexPath", "XeLaTeX"]] as const) {
 			new Setting(advanced).setName(label).addText(text => text
-				.setPlaceholder("Détection automatique").setValue(this.draft[key])
+				.setPlaceholder(t("automaticDetection")).setValue(this.draft[key])
 				.onChange(value => { this.draft[key] = value; })
-				.inputEl.setAttribute("aria-label", `Chemin de ${label}`));
+				.inputEl.setAttribute("aria-label", t("pathToProgram", { program: label })));
 		}
 
 		const message = advanced.createDiv({ attr: { role: "status", "aria-live": "polite" } });
-		new Setting(advanced).setName("Vérifier l’installation")
-			.setDesc("Les chemins personnalisés sont enregistrés lors de la vérification.")
-			.addButton(button => button.setButtonText("Enregistrer et vérifier").setCta().onClick(async () => {
+		new Setting(advanced).setName(t("checkInstallation"))
+			.setDesc(t("customPathsAreSavedWhenChecking"))
+			.addButton(button => button.setButtonText(t("saveAndCheck")).setCta().onClick(async () => {
 				const generation = ++this.generation;
 				const settings = { ...this.draft };
-				button.setDisabled(true).setButtonText("Vérification…");
+				button.setDisabled(true).setButtonText(t("checking"));
 				message.empty();
-				for (const element of Object.values(this.statuses)) element.setText("Recherche en cours…");
+				for (const element of Object.values(this.statuses)) element.setText(t("searching"));
 				try {
 					await this.plugin.saveSettings(settings);
 					await Promise.all((["pandoc", "xelatex"] as const).map(async tool => {
@@ -77,11 +112,11 @@ export class BookbinderSettingTab extends PluginSettingTab {
 					}));
 				} catch {
 					if (generation === this.generation) {
-						for (const element of Object.values(this.statuses)) element.setText("Vérification impossible.");
-						message.setText("La vérification a échoué. Vérifiez l’accès aux réglages et aux programmes, puis réessayez.");
+						for (const element of Object.values(this.statuses)) element.setText(t("couldNotCheckInstallation"));
+						message.setText(t("toolCheckFailed"));
 					}
 				} finally {
-					if (generation === this.generation) button.setDisabled(false).setButtonText("Enregistrer et vérifier");
+					if (generation === this.generation) button.setDisabled(false).setButtonText(t("saveAndCheck"));
 				}
 			}));
 	}
@@ -92,28 +127,45 @@ export class BookbinderSettingTab extends PluginSettingTab {
 
 	private displayProject(project: Setting): void {
 		const error = project.descEl.createDiv({ attr: { role: "status", "aria-live": "polite" } });
-		project.addButton(button => button.setButtonText("Créer/ouvrir projet").setCta().onClick(async () => {
+		project.addButton(button => button.setButtonText(t("createOpenProject")).setCta().onClick(async () => {
 			button.setDisabled(true); error.empty();
 			try {
 				const adapter = this.app.vault.adapter;
-				if (!(adapter instanceof FileSystemAdapter)) throw new Error("Les projets nécessitent Obsidian sur ordinateur.");
+				if (!(adapter instanceof FileSystemAdapter)) throw new Error(t("projectsRequireObsidianOnDesktop"));
 				const source = this.app.workspace.getActiveFile();
 				const initial = adapter.getFullPath(source?.parent?.path ?? "");
-				const directory = await chooseOutputDirectory(initial, "Choisir le dossier du projet de livre");
-				if (directory) await openProjectEditor(this.app, directory, this.plugin.resources["epub/base.css"]);
+				const directory = await chooseOutputDirectory(initial, t("chooseTheBookProjectFolder"));
+				if (directory) await openProjectEditor(this.app, directory, this.plugin.resources["epub/base.css"], this.plugin.fontDirectory);
 			} catch (cause) { error.setText(cause instanceof Error ? cause.message : String(cause)); }
 			finally { button.setDisabled(false); }
 		}));
 	}
 
+	private displayCloneProject(setting: Setting): void {
+		const message = setting.descEl.createDiv({ attr: { role: "status", "aria-live": "polite" } });
+		setting.addButton(button => button.setButtonText(t("cloneAProject")).onClick(async () => {
+			button.setDisabled(true); message.empty();
+			try {
+				const [filename] = await chooseFiles(t("chooseTheProjectToClone"), ["md", "yml"]);
+				if (!filename) return;
+				const directory = await chooseOutputDirectory(undefined, t("chooseTheNewProjectFolder"));
+				if (!directory) return;
+				await cloneProjectFile(filename, directory, parseYaml, stringifyYaml);
+				message.setText(t("projectCloned"));
+				await openProjectEditor(this.app, directory, this.plugin.resources["epub/base.css"], this.plugin.fontDirectory);
+			} catch (cause) { message.setText(cause instanceof Error ? cause.message : String(cause)); }
+			finally { button.setDisabled(false); }
+		}));
+	}
+
 	private displayOutputDirectory(setting: Setting): void {
-		const input = new TextComponent(setting.controlEl).setPlaceholder("Dossier du fichier source")
+		const input = new TextComponent(setting.controlEl).setPlaceholder(t("sourceFileFolder"))
 			.setValue(this.plugin.settings.outputDirectory);
 		input.inputEl.readOnly = true;
-		input.inputEl.setAttribute("aria-label", "Dossier de génération");
-		const browse = new ButtonComponent(setting.controlEl).setButtonText("Parcourir…");
+		input.inputEl.setAttribute("aria-label", t("outputFolder"));
+		const browse = new ButtonComponent(setting.controlEl).setButtonText(t("browseDialog"));
 		const reset = new ExtraButtonComponent(setting.controlEl).setIcon("rotate-ccw")
-			.setTooltip("Utiliser le dossier du fichier source").setDisabled(!this.plugin.settings.outputDirectory);
+			.setTooltip(t("useTheSourceFileFolder")).setDisabled(!this.plugin.settings.outputDirectory);
 		const error = setting.descEl.createDiv({ attr: { role: "status", "aria-live": "polite" } });
 		const update = async (select: () => Promise<string | undefined>): Promise<void> => {
 			browse.setDisabled(true);
@@ -126,7 +178,7 @@ export class BookbinderSettingTab extends PluginSettingTab {
 				this.draft.outputDirectory = directory;
 				input.setValue(directory);
 			} catch (cause) {
-				error.setText(`Impossible de définir le dossier : ${cause instanceof Error ? cause.message : String(cause)}`);
+				error.setText(t("couldNotSetTheFolderError", { error: cause instanceof Error ? cause.message : String(cause) }));
 			} finally {
 				browse.setDisabled(false);
 				reset.setDisabled(!this.plugin.settings.outputDirectory);
@@ -143,9 +195,9 @@ export class BookbinderSettingTab extends PluginSettingTab {
 	private async showStatus(element: HTMLElement, status: ToolStatus, tool: Tool, generation: number): Promise<void> {
 		if (generation !== this.generation || !element.isConnected) return;
 		element.empty();
-		element.createDiv({ text: status.state === "found" ? `Détecté · ${status.version}` : status.message });
+		element.createDiv({ text: status.state === "found" ? t("detectedVersion", { version: status.version }) : status.message });
 		if (status.path) element.createDiv({ text: status.path, cls: "bookbinder-tool-path" });
-		const update = element.createDiv({ text: "Recherche de la version en ligne…" });
+		const update = element.createDiv({ text: t("checkingTheOnlineVersion") });
 		const result = await checkUpdate(tool, status, async url => {
 			const response = await requestUrl({ url, throw: false });
 			if (response.status !== 200) throw new Error(`HTTP ${response.status}`);

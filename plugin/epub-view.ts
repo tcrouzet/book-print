@@ -1,3 +1,4 @@
+import { t } from "./i18n.ts";
 import { shell } from "electron";
 import { ButtonComponent, FileSystemAdapter, FileView, type TFile } from "obsidian";
 
@@ -12,12 +13,12 @@ export class EpubView extends FileView {
 		this.contentEl.empty();
 		this.contentEl.createEl("h2", { text: file.basename });
 		const error = this.contentEl.createDiv({ attr: { role: "alert" } });
-		new ButtonComponent(this.contentEl).setButtonText("Lire l’ePub").setCta().onClick(async () => {
+		new ButtonComponent(this.contentEl).setButtonText(t("readEpub")).setCta().onClick(async () => {
 			try {
 				const adapter = this.app.vault.adapter;
-				if (!(adapter instanceof FileSystemAdapter)) throw new Error("La lecture nécessite Obsidian sur ordinateur.");
+				if (!(adapter instanceof FileSystemAdapter)) throw new Error(t("readingRequiresObsidianOnDesktop"));
 				const message = await shell.openPath(adapter.getFullPath(file.path));
-				if (message) throw new Error(`Impossible d’ouvrir l’EPUB : ${message}`);
+				if (message) throw new Error(t("couldNotOpenEpubError", { error: message }));
 			} catch (cause) { error.setText(cause instanceof Error ? cause.message : String(cause)); }
 		});
 	}

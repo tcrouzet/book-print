@@ -1,6 +1,15 @@
 declare module "electron" {
 	export const remote: {
 		dialog: {
+			showMessageBox(options: {
+				type: string;
+				title: string;
+				message: string;
+				detail: string;
+				buttons: string[];
+				defaultId: number;
+				cancelId: number;
+			}): Promise<{ response: number }>;
 			showOpenDialog(options: {
 				title: string;
 				defaultPath?: string;
