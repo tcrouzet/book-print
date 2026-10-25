@@ -2,6 +2,7 @@ import { t } from "./i18n.ts";
 import * as path from "node:path";
 import { isProjectNote } from "./project-view.ts";
 import { bookStyles, contextRules } from "./book-styles.ts";
+import { pdfPage } from "./page-layout.ts";
 import { defaultFilename, slugFilename } from "./filename.ts";
 export { isProjectNote };
 export { projectCss } from "./presentation.ts";
@@ -41,8 +42,6 @@ export interface BookProject {
 const defaultFusion: FusionOptions = {
 	noteSeparator: "", excludeCharacters: "_", excludeNames: "sortspec",
 };
-const obsoleteFusion = new Set(["smallcaps", "right", "newpage", "toppara", "poem", "nocomments", "noMDcomments"]);
-const obsoleteStyles = new Set(["p.subtitle", "p.author", "p.date", "div.rights", "div.abstract-title", "div.abstract", "blockquote", "div.top-para", "div.right", "div.poem-solo", "div.poem-top", "div.poem-bottom", "div.poem", "#dédicace p", "h1.unnumbered", "div.page-beak", ".thin-space", ".thin-space-before", ".thin-space-after"]);
 
 function object(value: unknown, field: string): Record<string, unknown> {
 	if (value === undefined || value === null) return {};
@@ -70,23 +69,13 @@ const styleProperties = new Set([
 	"margin-bottom", "margin-left", "margin-right", "color", "font-weight", "font-style", "page-break-before", "display", "letter-spacing",
 ]);
 
-const bodyRule = contextRules.find(rule => rule.paragraph === "p" && !rule.pseudo)!.selector;
-const legacyRules = new Map([
-	["h1 + p", bodyRule], ["h2 + p", bodyRule], ["h2 + p::first-letter", bodyRule + "::first-letter"],
-]);
-
-function contextRule(name: string): string | undefined {
-	return legacyRules.get(name) ?? contextRules.find(rule => rule.selector === name)?.selector;
-}
-
 function styles(value: unknown, field: string): Record<string, string | number> {
 	const result = { ...object(value, field) };
 	for (const [name, setting] of Object.entries(result)) {
-		if (name === "page-position" && (/^epub\.headings\.h[1-6]$/.test(field) || field === "epub.styles.h1.title") && (setting === "one-third" || setting === "two-thirds")) {
-			result[name] = "one-third";
+		if (name === "page-position" && (/^(epub|pdf)\.headings\.h[1-6]$/.test(field) || /^(epub|pdf)\.styles\.h1\.title$/.test(field)) && setting === "one-third") {
 			continue;
 		}
-		if (!styleProperties.has(name) && name !== "page-margin") throw new Error(t("fieldNameUnknownSetting", { field: field, name: name }));
+		if (!styleProperties.has(name)) throw new Error(t("fieldNameUnknownSetting", { field: field, name: name }));
 		if ((typeof setting !== "string" && typeof setting !== "number") || !/^[\p{L}\p{N}\s.,%'"#()-]+$/u.test(String(setting))) {
 			throw new Error(t("fieldNameInvalidPresentationValue", { field: field, name: name }));
 		}
@@ -94,14 +83,13 @@ function styles(value: unknown, field: string): Record<string, string | number> 
 	return result as Record<string, string | number>;
 }
 
-export function parseProject(value: unknown, defaultTitle: string): BookProject {
+export function parseProject(value: unknown, defaultTitle: string, format: "epub" | "pdf" | "docx" = "epub"): BookProject {
 	const data = object(value, t("projectProperties"));
-	const epub = object(data.epub, "epub");
+	const epub = object(data[format], format);
 	const metadata = { ...object(data.metadata, "metadata") };
 	for (const key of ["title", "subtitle", "author", "author-url", "description", "subject", "rights", "identifier", "publisher", "publisher-url", "isbn", "isbn-ebook", "lang", "date", "colophon"]) {
 		if (data[key] !== undefined) metadata[key] = data[key];
 	}
-	if (data.author_url !== undefined) metadata["author-url"] = data.author_url;
 	metadata.title ??= defaultTitle;
 	metadata.lang ??= "fr";
 	for (const key of ["subtitle", "author", "colophon"]) if (metadata[key] === null) delete metadata[key];
@@ -116,33 +104,26 @@ export function parseProject(value: unknown, defaultTitle: string): BookProject 
 	const filename = (typeof data.filename === "string" ? slugFilename(data.filename) : "") || defaultFilename(String(metadata.title), metadata.author);
 	const fusion = { ...defaultFusion };
 	for (const [key, setting] of Object.entries(object(data.fusion, "fusion"))) {
-		if (obsoleteFusion.has(key)) continue;
 		if (!Object.prototype.hasOwnProperty.call(defaultFusion, key)) throw new Error(t("fusionNameUnknownSetting", { name: key }));
 		if (typeof setting !== typeof defaultFusion[key as keyof FusionOptions]) throw new Error(t("fusionNameInvalidValue", { name: key }));
 		Object.assign(fusion, { [key]: setting });
 	}
 	const headings: BookProject["headings"] = {};
-	for (const [name, setting] of Object.entries(object(epub.headings, "epub.headings"))) {
+	for (const [name, setting] of Object.entries(object(epub.headings, `${format}.headings`))) {
 		if (!/^h[1-6]$/.test(name)) throw new Error(t("epubHeadingsNameUseH1ToH6", { name: name }));
-		headings[name] = styles(setting, `epub.headings.${name}`);
+		headings[name] = styles(setting, `${format}.headings.${name}`);
 	}
 	const namedStyles: BookProject["styles"] = {};
 	const rules: BookProject["rules"] = {};
-	for (const [name, setting] of Object.entries(object(epub.styles, "epub.styles"))) {
-		if (name === "body" || obsoleteStyles.has(name)) continue;
-		const rule = contextRule(name);
-		if (rule) { rules[rule] = { ...rules[rule], ...styles(setting, `epub.styles.${name}`) }; continue; }
+	for (const [name, setting] of Object.entries(object(epub.styles, `${format}.styles`))) {
 		if (!bookStyles.some(style => style.selector === name && style.sample)) throw new Error(t("epubStylesNameUnknownStyle", { name: name }));
-		namedStyles[name] = styles(setting, `epub.styles.${name}`);
+		namedStyles[name] = styles(setting, `${format}.styles.${name}`);
 	}
-	const explicitRules = Object.entries(object(epub.rules, "epub.rules"));
-	explicitRules.sort(([left], [right]) => Number(legacyRules.has(right)) - Number(legacyRules.has(left)));
-	for (const [name, setting] of explicitRules) {
-		const rule = contextRule(name);
-		if (!rule) throw new Error(t("epubRulesNameUnknownRule", { name: name }));
-		rules[rule] = { ...rules[rule], ...styles(setting, `epub.rules.${name}`) };
+	for (const [name, setting] of Object.entries(object(epub.rules, `${format}.rules`))) {
+		if (!contextRules.some(rule => rule.selector === name)) throw new Error(t("epubRulesNameUnknownRule", { name: name }));
+		rules[name] = styles(setting, `${format}.rules.${name}`);
 	}
-	const paragraph = { ...styles(object(epub.styles, "epub.styles").body, "epub.styles.body"), ...styles(epub.style, "epub.style") };
+	const paragraph = styles(epub.style, `${format}.style`);
 	const disabledRules = epub["disabled-rules"] ?? [];
 	if (!Array.isArray(disabledRules) || !disabledRules.every(kind => typeof kind === "string" && contextRules.some(rule => rule.kind === kind))) {
 		throw new Error(t("invalidDisabledRules"));
@@ -150,20 +131,22 @@ export function parseProject(value: unknown, defaultTitle: string): BookProject 
 	for (const key of ["cover", "cover-background"]) {
 		if (data[key] !== undefined && data[key] !== null && typeof data[key] !== "string") throw new Error(t("fieldMustReferToASingleImage", { field: key }));
 	}
-	const page = styles(epub.page, "epub.page");
+	const page = { ...object(epub.page, `${format}.page`) } as Record<string, string | number>;
 	if (epub.separator !== undefined && (typeof epub.separator !== "string" || epub.separator.includes("\0"))) {
 		throw new Error(t("epubSeparatorMustContainSeparatorCharacters"));
 	}
-	for (const key of Object.keys(page)) if (!["margin-top", "margin-bottom", "margin-left", "margin-right"].includes(key)) throw new Error(t("epubPageUseTheFourPageMargins"));
+	for (const key of Object.keys(page)) if (!["margin-top", "margin-bottom", "margin-left", "margin-right", ...(format === "pdf" ? ["paper-size", "paper-width", "paper-height", "page-mode", "margin-inner", "margin-outer", "binding-offset"] : [])].includes(key)) throw new Error(t("epubPageUseTheFourPageMargins"));
+	styles(Object.fromEntries(Object.entries(page).filter(([key]) => ["margin-top", "margin-bottom", "margin-left", "margin-right"].includes(key))), `${format}.page`);
+	if (format === "pdf") pdfPage(page);
 	return {
 		metadata, filename, fusion, headings, page, styles: namedStyles, rules, disabledRules: disabledRules as string[],
 		cover: strings(data.cover, "cover")[0],
 		background: strings(data["cover-background"], "cover-background")[0],
-		css: strings(epub.css ?? data.css, "epub.css"),
-		fonts: strings(epub.fonts ?? data.fonts, "epub.fonts"),
+		css: strings(epub.css, `${format}.css`),
+		fonts: strings(epub.fonts, `${format}.fonts`),
 		separator: epub.separator,
-		tocDepth: depth(epub["toc-depth"] ?? data.toc_level, 2, "epub.toc-depth"),
-		splitLevel: depth(epub["split-level"], 2, "epub.split-level"),
+		tocDepth: depth(epub["toc-depth"], 2, `${format}.toc-depth`),
+		splitLevel: depth(epub["split-level"], 2, `${format}.split-level`),
 		style: paragraph,
 	};
 }
@@ -172,8 +155,7 @@ export function excluded(relativePath: string, options: FusionOptions): boolean 
 	if (isProjectNote(relativePath)) return true;
 	const names = options.excludeNames.split(",").map(name => name.trim().toLowerCase()).filter(Boolean);
 	return relativePath.split("/").some(name => Array.from(options.excludeCharacters).some(character => name.includes(character))
-		|| names.includes(name.toLowerCase()) || names.includes(name.replace(/\.md$/i, "").toLowerCase())
-		|| /^fusion-.*-\d{8}(?:-\d{4})?\.md$/i.test(name));
+		|| names.includes(name.toLowerCase()) || names.includes(name.replace(/\.md$/i, "").toLowerCase()));
 }
 
 export function prepareMarkdown(content: string): string {

@@ -9,11 +9,14 @@ import { openProjectEditor } from "./project-modal";
 import { cloneProjectFile } from "./project-clone";
 import { fontCatalog, mountFontCatalog } from "./font-catalog.ts";
 import { installFontPackage, isFontPackageInstalled, readFontPackage } from "./font-package.ts";
+import { importFonts } from "./font-import.ts";
+import { readFontLibrary } from "./font-library.ts";
 
 export class BookbinderSettingTab extends PluginSettingTab {
 	private draft: BookbinderSettings;
 	private generation = 0;
 	private statuses: Partial<Record<Tool, HTMLElement>> = {};
+	private fontCatalogEl?: HTMLElement;
 
 	constructor(app: App, private plugin: BookbinderPlugin) {
 		super(app, plugin);
@@ -29,20 +32,41 @@ export class BookbinderSettingTab extends PluginSettingTab {
 			{ type: "group", heading: t("export"), items: [
 				{ name: t("outputFolder"), desc: t("defaultTheSameFolderAsTheMarkdownSourceFile"), aliases: ["Export", "Destination", t("browse")], render: setting => this.displayOutputDirectory(setting) },
 			] },
-			{ type: "group", heading: t("fonts"), items: [
-				{ name: t("fontPackage"), desc: t("fontPackageDescription"), aliases: [t("fontPackageCatalog")], render: setting => this.displayFontPackage(setting) },
-			] },
 			{ type: "group", heading: t("installation"), items: [
 				{ name: "Pandoc", desc: t("pandocCreatesWordAndEpubFiles"), render: setting => this.displayTool(setting, "pandoc") },
 				{ name: "LaTeX", desc: t("latexIsAlsoRequiredForPdfFiles"), aliases: ["XeLaTeX"], render: setting => this.displayTool(setting, "xelatex") },
 				{ name: t("customPaths"), aliases: [t("pandocPath"), t("xelatexPath"), t("checkInstallation"), t("saveAndCheck")], render: setting => this.displayCustomPaths(setting) },
 			] },
+			{ type: "group", heading: t("fonts"), items: [
+				{ name: t("fontLibrary"), desc: t("fontLibraryDescription"), aliases: [t("importFonts"), t("fontPackageCatalog")], render: setting => this.displayFontLibrary(setting) },
+				{ name: t("fontPackage"), desc: t("fontPackageDescription"), aliases: [t("fontPackageCatalog")], render: setting => this.displayFontPackage(setting) },
+			] },
 		];
+	}
+
+	private displayFontLibrary(setting: Setting): void {
+		this.containerEl.addClass("bookbinder-settings");
+		const status = setting.descEl.createDiv({ attr: { role: "status", "aria-live": "polite" } });
+		this.fontCatalogEl = setting.descEl.createDiv();
+		void this.refreshFontCatalog().catch(error => status.setText(error instanceof Error ? error.message : String(error)));
+		setting.addButton(button => button.setButtonText(t("importFonts")).onClick(async () => {
+			button.setDisabled(true); status.empty();
+			try { await importFonts(this.app, this.plugin.fontDirectory); await this.refreshFontCatalog(); }
+			catch (error) { status.setText(error instanceof Error ? error.message : String(error)); }
+			finally { button.setDisabled(false); }
+		}));
+	}
+
+	private async refreshFontCatalog(): Promise<void> {
+		const element = this.fontCatalogEl;
+		if (!element) return;
+		const fonts = await readFontLibrary(this.plugin.fontDirectory);
+		if (!element.isConnected || element !== this.fontCatalogEl) return;
+		element.empty(); mountFontCatalog(element, undefined, fonts);
 	}
 
 	private displayFontPackage(setting: Setting): void {
 		const status = setting.descEl.createDiv({ attr: { role: "status", "aria-live": "polite" } });
-		mountFontCatalog(setting.descEl);
 		setting.addButton(button => {
 			button.setButtonText(t("downloadFontPackage")).setDisabled(true);
 			const connected = () => status.isConnected;
@@ -59,6 +83,7 @@ export class BookbinderSettingTab extends PluginSettingTab {
 						return response.arrayBuffer;
 					});
 					await installFontPackage(this.plugin.fontDirectory, data);
+					await this.refreshFontCatalog();
 					if (connected()) { status.setText(t("fontPackageReady")); button.setButtonText(t("fontPackageInstalled")); }
 				} catch (error) {
 					if (connected()) { status.setText(error instanceof Error ? error.message : String(error)); button.setDisabled(false); }
@@ -146,7 +171,7 @@ export class BookbinderSettingTab extends PluginSettingTab {
 		setting.addButton(button => button.setButtonText(t("cloneAProject")).onClick(async () => {
 			button.setDisabled(true); message.empty();
 			try {
-				const [filename] = await chooseFiles(t("chooseTheProjectToClone"), ["md", "yml"]);
+				const [filename] = await chooseFiles(t("chooseTheProjectToClone"), ["md"]);
 				if (!filename) return;
 				const directory = await chooseOutputDirectory(undefined, t("chooseTheNewProjectFolder"));
 				if (!directory) return;

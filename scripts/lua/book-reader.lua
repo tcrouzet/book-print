@@ -109,8 +109,11 @@ function Reader(input)
   blocks = contextual_paragraphs(blocks, project.disabledRules)
   if project.colophonCredit then
     local colophon = pandoc.read(project.colophon or '', 'markdown')
-    colophon.blocks:insert(1, pandoc.Header(1, {}, pandoc.Attr('bookbinder-colophon', {'unnumbered', 'unlisted', 'bookbinder-colophon-boundary'})))
     colophon.blocks:insert(pandoc.Div(pandoc.read(project.colophonCredit, 'markdown').blocks, pandoc.Attr('', {'bookbinder-credit'})))
+    colophon = pandoc.Pandoc({
+      pandoc.Header(1, {pandoc.Str(project.colophonTitle or 'Colophon')}, pandoc.Attr('bookbinder-colophon', {'unnumbered', 'bookbinder-colophon-boundary'})),
+      pandoc.Div(colophon.blocks, pandoc.Attr('', {'bookbinder-colophon'}))
+    })
     blocks:extend(unique_identifiers(colophon, identifiers).blocks)
   end
   return pandoc.Pandoc(blocks)

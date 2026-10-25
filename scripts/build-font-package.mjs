@@ -8,7 +8,7 @@ const catalog = JSON.parse(await readFile(manifest, "utf8"));
 const hash = data => createHash("sha256").update(data).digest("hex");
 const files = [];
 for (const entry of catalog.files) {
-	if (!/^(?:README\.md|(?:corps|titres|symboles)\/[A-Za-z0-9]+\/(?:[A-Za-z0-9-]+\.otf|README\.md|LICENSE\.txt))$/.test(entry.path)) throw new Error(`Invalid package path: ${entry.path}`);
+	if (!/^(?:README\.md|[A-Za-z0-9-]+\.otf|[A-Za-z0-9]+\.(?:md|LICENSE\.txt))$/.test(entry.path)) throw new Error(`Invalid package path: ${entry.path}`);
 	const data = await readFile(new URL(entry.path, root));
 	entry.size = data.length;
 	entry.sha256 = hash(data);

@@ -14,6 +14,7 @@ export const bookStyles: BookStyle[] = [
 	{ selector: "p", get label() { return t("bodyText"); } },
 	...[1, 2, 3, 4, 5, 6].map(level => ({ selector: "h" + level, get label() { return t("headingLevel", { level }); } })),
 	{ selector: "h1.title", get label() { return t("bookTitle"); }, get sample() { return t("previewBookTitle"); }, target: "h1.title" },
+	{ selector: ".bookbinder-colophon p", get label() { return t("colophon"); }, get sample() { return t("previewColophon"); }, target: ".bookbinder-colophon > p" },
 	{ selector: "blockquote p", get label() { return t("quotation"); }, get sample() { return t("previewQuote"); }, target: "p" },
 	{ selector: "section.footnotes p", get label() { return t("footnote"); }, get sample() { return t("previewFootnote"); }, target: "p" },
 	{ selector: "ul", get label() { return t("bulletedList"); }, get sample() { return t("previewBullets"); } },

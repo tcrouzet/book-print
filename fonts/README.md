@@ -1,39 +1,33 @@
 # Bookbinder font package
 
-An optional library imported from polices-complet.zip: 22 families and 84 font files, organised by the archive’s body-text, heading and symbol categories. These categories are suggestions, not restrictions. In particular, several faces under titres also work for continuous text.
+An optional library imported from polices-complet.zip: 22 families and 84 font files in one flat folder. The alphabetical list identifies each family as Serif, Sans serif or Symbol. Each family has a usage note, file/version table, full licence and source links.
 
-The plugin can install the package into its shared data/_fonts library. Fonts are not bundled into main.js, assigned to projects or embedded into books automatically. Body text stays on Auto by default. Each family below has a usage note, a file/version table, a licence and source links.
+The plugin installs fonts into its shared data/_fonts library. A style declaration automatically includes its font in the book. Body text stays on Auto by default. Users can also import their own fonts and choose their type. Font binaries are not bundled into main.js.
 
-## Body text / corps
+## Families
 
-- [Fira Sans](corps/FiraSans/README.md)
-- [IBM Plex Sans](corps/IBMPlexSans/README.md)
-- [Literata](corps/Literata/README.md)
-- [Lora](corps/Lora/README.md)
-- [Noto Sans](corps/NotoSans/README.md)
-- [Noto Serif](corps/NotoSerif/README.md)
-- [Open Sans](corps/OpenSans/README.md)
-- [PT Sans](corps/PTSans/README.md)
-- [PT Serif](corps/PTSerif/README.md)
-- [Source Sans 3](corps/SourceSans3/README.md)
-- [Source Serif 4](corps/SourceSerif4/README.md)
-- [Vollkorn](corps/Vollkorn/README.md)
-
-## Headings / titres
-
-- [Alegreya](titres/Alegreya/README.md)
-- [Alegreya SC](titres/AlegreyaSC/README.md)
-- [Cardo](titres/Cardo/README.md)
-- [Cormorant Garamond](titres/CormorantGaramond/README.md)
-- [Crimson Pro](titres/CrimsonPro/README.md)
-- [EB Garamond](titres/EBGaramond/README.md)
-- [Gentium Book Plus](titres/GentiumBookPlus/README.md)
-- [Playfair Display](titres/PlayfairDisplay/README.md)
-- [Spectral](titres/Spectral/README.md)
-
-## Symbols / symboles
-
-- [Noto Sans Symbols 2](symboles/NotoSansSymbols2/README.md)
+- [Alegreya](Alegreya.md) (Serif)
+- [Alegreya SC](AlegreyaSC.md) (Serif)
+- [Cardo](Cardo.md) (Serif)
+- [Cormorant Garamond](CormorantGaramond.md) (Serif)
+- [Crimson Pro](CrimsonPro.md) (Serif)
+- [EB Garamond](EBGaramond.md) (Serif)
+- [Fira Sans](FiraSans.md) (Sans serif)
+- [Gentium Book Plus](GentiumBookPlus.md) (Serif)
+- [IBM Plex Sans](IBMPlexSans.md) (Sans serif)
+- [Literata](Literata.md) (Serif)
+- [Lora](Lora.md) (Serif)
+- [Noto Sans](NotoSans.md) (Sans serif)
+- [Noto Sans Symbols 2](NotoSansSymbols2.md) (Symbol)
+- [Noto Serif](NotoSerif.md) (Serif)
+- [Open Sans](OpenSans.md) (Sans serif)
+- [Playfair Display](PlayfairDisplay.md) (Serif)
+- [PT Sans](PTSans.md) (Sans serif)
+- [PT Serif](PTSerif.md) (Serif)
+- [Source Sans 3](SourceSans3.md) (Sans serif)
+- [Source Serif 4](SourceSerif4.md) (Serif)
+- [Spectral](Spectral.md) (Serif)
+- [Vollkorn](Vollkorn.md) (Serif)
 
 ## Licences and provenance
 
@@ -41,4 +35,4 @@ Each family includes its original OFL licence notice retrieved from Google Fonts
 
 ## Download package
 
-bookbinder-fonts-v1.json.gz is the optional download used by the plugin. It contains the font binaries and these notes/licences. A versioned filename keeps the download separate from plugin builds. Rebuild it after changing this catalogue or its files with node scripts/build-font-package.mjs. Publish the fonts folder and package in the GitHub repository to enable remote installation; the normal plugin release assets remain unchanged.
+bookbinder-fonts.json.gz is the optional download used by the plugin. It contains the font binaries and these notes/licences. Rebuild it with node scripts/build-font-package.mjs. Publish this flat fonts folder and package to GitHub to enable remote installation. Normal plugin release assets remain unchanged.

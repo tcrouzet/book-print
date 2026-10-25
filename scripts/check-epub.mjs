@@ -79,11 +79,11 @@ const sources = [
 ];
 sources.push({ path: path.join(directory, "bookbinder.md"), content: "---\ntitle: Projet\n---\nPROJET_A_EXCLURE\n[Modifier le projet](obsidian://bookbinder)\n" });
 sources.push({ path: path.join(directory, "partie A/bookbinder.md"), content: "PROJET_IMBRIQUE_A_EXCLURE\n" });
-sources.push({ path: path.join(directory, "book-print.md"), content: "ANCIEN_PROJET_A_EXCLURE\n" });
+sources.push({ path: path.join(directory, "book-print.md"), content: "DOCUMENT_ORDINAIRE\n" });
 sources[0].content += "\n<!-- ![[image absente.png]] -->\n%% ![[autre image absente.png]] %%\n\n![[image avec espaces.png]]\n";
 sources[0].content += "\n[Capitales]{.smallcaps} H~2~O m^2^ ~~barré~~.\n\n```{.tab}\n\tLigne tabulée *littérale*\n```\n\n> Une citation Markdown.\n";
 const project = parseProject({ title: options.title, author: options.author, identifier: "ISBN-0", date: "1900-01-01", colophon: "COL_PERSONNEL **Édition indépendante**.\n\nFin de fabrication.", epub: { style: { "font-size": "1.1em" },
-	styles: { "h1.title": { "font-size": "2.25em", "page-position": "one-third" }, "p.tab": { "font-style": "italic", "font-size": "1.25em", "margin-left": "2em", "line-height": "1.5em", "text-align": "right" } },
+	styles: { ".bookbinder-colophon p": { "font-size": "0.9em", "font-style": "italic", "text-align": "right", "margin-left": "0.5em", "text-indent": "0.75em" }, "h1.title": { "font-size": "2.25em", "page-position": "one-third" }, "p.tab": { "font-style": "italic", "font-size": "1.25em", "margin-left": "2em", "line-height": "1.5em", "text-align": "right" } },
 	rules: { ".bookbinder-after-heading-tab + p.tab": { "text-align": "center" }, ".bookbinder-after-heading-tab + p.tab::first-letter": { "font-size": "2em" } },
 } }, "Sans effet");
 const output = path.join(directory, "Livre avec espaces.epub");
@@ -123,14 +123,31 @@ assert.match(colophon, /id="bookbinder-colophon"/);
 assert.match(colophon, /COL_PERSONNEL <strong>Édition indépendante<\/strong>/);
 assert.match(colophon, /Généré par <a href="https:\/\/community\.obsidian\.md\/plugins\/bookbinder">Bookbinder<\/a>/);
 assert.match(colophon, /<div class="bookbinder-credit">\s*<p>Généré par[\s\S]*le 02\/01\/2025\.<\/p>\s*<\/div>/);
-assert.doesNotMatch(colophon, /<h[1-6][^>]*>\s*Colophon\s*<\/h[1-6]>/);
+assert.match(colophon, /<h1\b[^>]*>Colophon<\/h1>/, "Le titre technique fournit le libellé du sommaire ; son masquage est vérifié au rendu");
 assert.doesNotMatch(colophon, /1900/, "Le crédit utilise la date de génération, pas celle de publication");
 assert.equal((colophon.match(/community\.obsidian\.md\/plugins\/bookbinder/g) ?? []).length, 1);
 assert.doesNotMatch(colophon, /Note <em>première|Note <strong>deuxième/);
 const navigation = (await exec("/usr/bin/unzip", ["-p", output, "EPUB/nav.xhtml"])).stdout;
-assert.doesNotMatch(navigation, /bookbinder-colophon/, "Le colophon reste hors de la table des matières");
+assert.match(navigation, /<a\b[^>]*>Colophon<\/a>/, "Le sommaire contient un lien Colophon");
+async function colophonNavigation(filename) {
+	const nav = (await exec("/usr/bin/unzip", ["-p", filename, "EPUB/nav.xhtml"])).stdout;
+	const links = Array.from(nav.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>Colophon<\/a>/g), match => match[1]);
+	assert.ok(links.length, "Une entrée Colophon est présente dans le sommaire");
+	const target = new URL(links.at(-1), "https://book.test/EPUB/nav.xhtml");
+	const page = (await exec("/usr/bin/unzip", ["-p", filename, decodeURIComponent(target.pathname.slice(1))])).stdout;
+	assert.equal(page, await lastPage(filename), "Le lien Colophon ouvre la dernière page de l’ordre de lecture");
+	if (target.hash) assert.ok(page.includes(`id="${decodeURIComponent(target.hash.slice(1))}"`), "L’ancre du lien Colophon existe sur la page finale");
+	const ncx = (await exec("/usr/bin/unzip", ["-p", filename, "EPUB/toc.ncx"])).stdout;
+	const ncxLinks = Array.from(ncx.matchAll(/<text>Colophon<\/text>[\s\S]*?<content\b[^>]*src="([^"]+)"/g), match => new URL(match[1], "https://book.test/EPUB/toc.ncx").href);
+	assert.equal(ncxLinks.at(-1), target.href, "Le sommaire NCX ouvre le même colophon que la navigation EPUB");
+	return links;
+}
+assert.equal((await colophonNavigation(output)).length, 1);
 const repeatedOutput = path.join(directory, "Titres repetes.epub");
-await exportEpub({ ...request, sources: repeatedSources, project: parseProject({ cover: "cover.jpg", epub: { "split-level": 1 } }, "Titres répétés"), output: repeatedOutput });
+await exportEpub({ ...request, sources: [...repeatedSources, { path: path.join(directory, "colophon-existant.md"), content: "# Colophon {#bookbinder-colophon}\n\nUn chapitre du manuscrit." }], project: parseProject({ cover: "cover.jpg", epub: { "split-level": 1 } }, "Titres répétés"), output: repeatedOutput });
+const repeatedColophons = await colophonNavigation(repeatedOutput);
+assert.equal(repeatedColophons.length, 2, "Un chapitre nommé Colophon et la page finale gardent chacun leur entrée");
+assert.equal(new Set(repeatedColophons).size, 2, "Un identifiant déjà employé ne détourne pas le lien du colophon final");
 const repeatedNav = (await exec("/usr/bin/unzip", ["-p", repeatedOutput, "EPUB/nav.xhtml"])).stdout;
 const navigationLinks = Array.from(repeatedNav.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>([^<]*)<\/a>/g), match => ({ href: match[1], label: match[2] }));
 for (const label of ["Partie", "Août", "Été"]) {
@@ -173,6 +190,7 @@ assert.match(content, /Ligne tabulée <em>littérale<\/em>/);
 assert.match(content, /<blockquote/);
 assert.doesNotMatch(content, /privé|confidentiel|Ne doit pas remplacer/);
 assert.doesNotMatch(content, /PROJET_A_EXCLURE|PROJET_IMBRIQUE_A_EXCLURE|obsidian:\/\/bookbinder/);
+assert.match(content, /DOCUMENT_ORDINAIRE/, "Only the current project note is excluded automatically");
 const coverItem = content.match(/<item\s[^>]*properties="cover-image"[^>]*>/)?.[0];
 const coverName = coverItem?.match(/href="([^"]+)"/)?.[1];
 assert.ok(coverName, "Couverture déclarée dans le manifeste EPUB");
@@ -191,10 +209,18 @@ const colophonRendering = await evaluateInChrome(`(() => {
 	document.body.replaceChildren(...Array.from(parsed.querySelector("body").childNodes, node => document.importNode(node, true)));
 	const style = document.createElement("style"); style.textContent = ${JSON.stringify(tabCss)}; document.head.append(style);
 	const boundary = document.querySelector("h1"), credit = document.querySelector(".bookbinder-credit"), link = credit.querySelector("a");
-	return { hidden: getComputedStyle(boundary).display, gap: parseFloat(getComputedStyle(credit).marginTop), size: parseFloat(getComputedStyle(credit).fontSize), underline: getComputedStyle(link).textDecorationLine, align: getComputedStyle(credit.querySelector("p")).textAlign, visible: credit.getBoundingClientRect().height > 0 };
+	const personal = getComputedStyle(document.querySelector(".bookbinder-colophon > p")), attribution = getComputedStyle(credit.querySelector("p"));
+	return { hidden: getComputedStyle(boundary).display, gap: parseFloat(getComputedStyle(credit).marginTop), size: parseFloat(getComputedStyle(credit).fontSize), underline: getComputedStyle(link).textDecorationLine, align: attribution.textAlign, visible: credit.getBoundingClientRect().height > 0,
+		personalAlign: personal.textAlign, personalStyle: personal.fontStyle, personalSize: parseFloat(personal.fontSize), bodySize: parseFloat(getComputedStyle(document.body).fontSize), attributionSize: parseFloat(attribution.fontSize), attributionIndent: attribution.textIndent, attributionMargin: attribution.marginLeft };
 })()`, directory);
 assert.equal(colophonRendering.hidden, "none", "Aucun titre ne s’affiche sur la page finale");
 assert.equal(colophonRendering.align, "center", "Le crédit de génération est centré");
+assert.equal(colophonRendering.personalAlign, "right");
+assert.equal(colophonRendering.personalStyle, "italic");
+assert.ok(Math.abs(colophonRendering.personalSize / colophonRendering.bodySize - 0.9) < 0.01, "La taille du style Colophon s’applique au texte de publication");
+assert.ok(Math.abs(colophonRendering.attributionSize / colophonRendering.personalSize - 0.8) < 0.01, "Le crédit suit la typographie du colophon en restant plus petit");
+assert.equal(colophonRendering.attributionIndent, "0px");
+assert.equal(colophonRendering.attributionMargin, "0px");
 assert.ok(colophonRendering.visible && colophonRendering.gap >= colophonRendering.size * 2.9, "Le crédit est nettement séparé et reste visible");
 assert.ok(colophonRendering.underline.includes("underline"), "Le lien Bookbinder est souligné par défaut");
 const tabRendering = await evaluateInChrome(`(() => {
@@ -228,11 +254,13 @@ const defaultColophon = await lastPage(path.join(directory, "Fichier seul.epub")
 assert.match(defaultColophon, /id="bookbinder-colophon"/);
 assert.match(defaultColophon, /Généré par <a href="https:\/\/community\.obsidian\.md\/plugins\/bookbinder">Bookbinder<\/a>/);
 assert.doesNotMatch(defaultColophon, /COL_PERSONNEL/);
+await colophonNavigation(path.join(directory, "Fichier seul.epub"));
 const englishOutput = path.join(directory, "English.epub");
 await exportEpub({ ...request, project: parseProject({ cover: "cover.jpg", lang: "en" }, "English book"), sources: [sources[0]], output: englishOutput });
 const englishColophon = await lastPage(englishOutput);
 assert.match(englishColophon, /Generated by <a href="https:\/\/community\.obsidian\.md\/plugins\/bookbinder">Bookbinder<\/a>/);
 assert.match(englishColophon, /on 1\/2\/2025\./);
+await colophonNavigation(englishOutput);
 setLocale("en");
 await exportEpub({ ...request, project: parseProject(undefined, "Sans YAML"), sources: [sources[0]], output: path.join(directory, "Sans YAML.epub") });
 setLocale("fr");

@@ -1,7 +1,9 @@
 import { getLocale, t } from "./i18n.ts";
-import { fontFamily, fontFilename, projectCss, type Presentation } from "./presentation";
+import { fontFamiliesInStyles, fontFamily, fontFilename, fontsInStyles, projectCss, type Presentation } from "./presentation";
 import { bookStyles, contextRules, sortedBookStyles, type BookStyle } from "./book-styles";
 import { mountProjectTabs } from "./project-tabs";
+import { millimetres, pdfMarginField } from "./page-layout.ts";
+import { fontLabel, type FontType } from "./font-catalog.ts";
 
 interface StyleEditorOptions {
 	sanitizeHTMLToDom: (html: string) => DocumentFragment;
@@ -9,6 +11,9 @@ interface StyleEditorOptions {
 	format?: "epub" | "pdf" | "docx";
 	setIcon?: (element: HTMLElement, name: string) => void;
 	rules?: boolean;
+	fontLibrary?: () => readonly string[];
+	fontType?: (reference: string) => FontType | undefined;
+	selectFont?: (reference: string, apply: () => void) => Promise<void>;
 }
 
 export class StyleEditor {
@@ -22,12 +27,13 @@ export class StyleEditor {
 	private rules?: HTMLStyleElement;
 	private base?: HTMLStyleElement;
 	private fonts = new Map<string, Uint8Array>();
+	private loadingFont = false;
 	private disposed = false;
 	private finishReady?: () => void;
 	private pageContainer?: HTMLElement;
 	readonly ready: Promise<void>;
 
-	constructor(container: HTMLElement, readonly presentation: Presentation, private css: string, private changed: () => void, private requestClose: (() => void) | undefined, private options: StyleEditorOptions) {
+	constructor(container: HTMLElement, readonly presentation: Presentation, private css: string, private onChange: () => void, private requestClose: (() => void) | undefined, private options: StyleEditorOptions) {
 		this.makeEl = options.createEl ?? createEl;
 		this.separatorCharacters = presentation.separator ?? "⁂";
 		presentation.page ??= {};
@@ -35,11 +41,6 @@ export class StyleEditor {
 		presentation.rules ??= {};
 		presentation.disabledRules ??= [];
 		if (options.rules) this.selected = contextRules[0].selector;
-		const legacyMargin = presentation.style["page-margin"];
-		if (legacyMargin !== undefined) {
-			for (const side of ["top", "bottom", "left", "right"]) presentation.page["margin-" + side] ??= legacyMargin;
-			delete presentation.style["page-margin"];
-		}
 		this.toolbar = this.makeEl("div");
 		this.toolbar.className = "bookbinder-toolbar";
 		this.toolbar.setAttribute("role", "group");
@@ -91,7 +92,7 @@ export class StyleEditor {
 						preview.body.append(paragraph, element);
 					} else preview.body.append(element);
 				}
-				if (this.relativeUnits) for (const style of this.catalog.filter(style => style.sample)) {
+				if (this.options.format !== "docx") for (const style of this.catalog.filter(style => style.sample)) {
 					const wrapper = this.options.sanitizeHTMLToDom(style.sample!);
 					const element = wrapper.querySelector<HTMLElement>(style.target ?? style.selector)!;
 					element.dataset.bookStyle = style.selector;
@@ -134,7 +135,29 @@ export class StyleEditor {
 		this.update(); this.renderToolbar();
 	}
 
-	refreshFonts(): void { this.updateBase(); this.refresh(); }
+	refreshFonts(): void { this.presentation.fonts = this.usedFonts(); this.updateBase(); this.refresh(); }
+
+	private usedFonts(): string[] {
+		return fontsInStyles(this.presentation, [...(this.options.fontLibrary?.() ?? []), ...this.fonts.keys()]);
+	}
+
+	private changed(): void {
+		this.presentation.fonts = this.usedFonts();
+		const input = this.toolbar.querySelector<HTMLSelectElement>(".bookbinder-character-main select");
+		if (input) this.sortFontChoices(input);
+		this.onChange();
+	}
+
+	private sortFontChoices(input: HTMLSelectElement): void {
+		const used = new Set([...fontFamiliesInStyles(this.presentation), ...this.presentation.fonts.map(fontFamily)]);
+		const [automatic, ...options] = Array.from(input.options);
+		if (!automatic) return;
+		const compare = (left: HTMLOptionElement, right: HTMLOptionElement) => left.text.localeCompare(right.text, getLocale());
+		const active = options.filter(option => used.has(option.value)).sort(compare);
+		const inactive = options.filter(option => !used.has(option.value)).sort(compare);
+		input.replaceChildren(automatic, ...active, ...(active.length && inactive.length ? [this.makeEl("hr")] : []), ...inactive);
+		input.value = String(this.values()["font-family"] ?? "");
+	}
 
 	async mountPage(container: HTMLElement): Promise<void> {
 		await this.ready;
@@ -161,15 +184,19 @@ export class StyleEditor {
 		const computed = this.frame.contentWindow!.getComputedStyle(this.frame.contentDocument!.body);
 		const unit = this.relativeUnits ? "em" : "mm";
 		const basis = this.relativeUnits ? parseFloat(this.frame.contentWindow!.getComputedStyle(this.frame.contentDocument!.documentElement).fontSize) : 96 / 25.4;
-		for (const [side, titleText] of [["top", t("topPageMargin")], ["bottom", t("bottomPageMargin")], ["left", t("leftPageMargin")], ["right", t("rightPageMargin")]]) {
+		const pdf = this.options.format === "pdf", double = pdf && this.presentation.page!["page-mode"] === "double";
+		const fields = [["top", t("topPageMargin")], ["bottom", t("bottomPageMargin")],
+			...(double ? [["left", t("innerPageMargin")], ["right", t("outerPageMargin")]] : [["right", t("rightPageMargin")], ["left", t("leftPageMargin")]]),
+			...(pdf ? [["binding", t("bindingMargin")]] : [])];
+		for (const [side, titleText] of fields) {
 			const label = t("labelUnit", { label: titleText, unit });
-			const name = "margin-" + side;
+			const name = side === "binding" ? "binding-offset" : pdf ? pdfMarginField(this.presentation.page!, side) : "margin-" + side;
 			const wrapper = this.makeEl("label"); wrapper.className = "bookbinder-page-field";
 			const title = this.makeEl("span"); title.textContent = label; wrapper.append(title);
 			const input = this.makeEl("input"); input.type = "number"; input.step = "any"; input.min = "0"; input.max = "300"; input.placeholder = t("auto");
 			input.setAttribute("aria-label", label);
-			const raw = this.presentation.page![name];
-			input.value = raw === undefined ? "" : this.relativeUnits && /^-?[\d.]+em$/.test(String(raw)) ? String(parseFloat(String(raw))) : String(Number((parseFloat(computed.getPropertyValue("padding-" + side)) / basis).toFixed(4)));
+			const raw = this.presentation.page![name] ?? (double && side !== "binding" ? this.presentation.page!["margin-" + side] : undefined);
+			input.value = raw === undefined ? "" : !this.relativeUnits ? String(millimetres(raw)) : this.relativeUnits && /^-?[\d.]+em$/.test(String(raw)) ? String(parseFloat(String(raw))) : String(Number((parseFloat(computed.getPropertyValue("padding-" + side)) / basis).toFixed(4)));
 			input.addEventListener("input", () => {
 				if (!input.checkValidity()) return;
 				if (input.value === "") delete this.presentation.page![name];
@@ -178,18 +205,6 @@ export class StyleEditor {
 			});
 			wrapper.append(input); container.append(wrapper);
 		}
-	}
-
-	removeFont(filename: string): void {
-		const family = fontFamily(filename);
-		this.fonts.delete(filename);
-		this.presentation.fonts = this.presentation.fonts.filter(value => value !== filename);
-		for (const style of [this.presentation.style, ...Object.values(this.presentation.headings), ...Object.values(this.presentation.styles ?? {}), ...Object.values(this.presentation.rules ?? {})]) {
-			if (style["font-family"] === family) delete style["font-family"];
-		}
-		for (const face of this.frame.contentDocument?.fonts ?? []) if (face.family === family) this.frame.contentDocument!.fonts.delete(face);
-		this.updateBase();
-		this.changed(); this.update(); this.renderToolbar();
 	}
 
 	dispose(): void {
@@ -204,7 +219,7 @@ export class StyleEditor {
 	private get relativeUnits(): boolean { return !this.options.format || this.options.format === "epub"; }
 	private get catalog(): BookStyle[] {
 		if (this.options.rules) return contextRules;
-		return this.relativeUnits ? sortedBookStyles() : bookStyles.filter(style => !style.sample);
+		return this.options.format !== "docx" ? sortedBookStyles() : bookStyles.filter(style => !style.sample);
 	}
 
 	private values(selector = this.selected): Record<string, string | number> {
@@ -284,7 +299,13 @@ export class StyleEditor {
 		const accent = this.toolbar.ownerDocument.defaultView!.getComputedStyle(this.toolbar).getPropertyValue("--text-accent") || "Highlight";
 		const page = this.presentation.page ?? {};
 		// @page inherits its font from the root; preview padding must use the same reference.
-		const padding = ["top", "right", "bottom", "left"].map(side => String(page["margin-" + side] ?? "1.2em").replace(/^(-?[\d.]+)em$/, "$1rem")).join(" ");
+		const padding = ["top", "right", "bottom", "left"].map(side => {
+			if (this.options.format === "pdf") {
+				const margin = millimetres(page[pdfMarginField(page, side)] ?? page["margin-" + side] ?? "20mm");
+				return margin + (side === "left" ? millimetres(page["binding-offset"] ?? "0mm") : 0) + "mm";
+			}
+			return String(page["margin-" + side] ?? "1.2em").replace(/^(-?[\d.]+)em$/, "$1rem");
+		}).join(" ");
 		this.rules.textContent = `html{color:black;background:white}body{margin:0;padding:${padding}}
 			.bookbinder-separator-line{border-top:1px solid}
 			[data-book-style]{cursor:pointer}[data-book-style]:focus-visible{outline:2px solid ${accent};outline-offset:4px}
@@ -342,7 +363,7 @@ export class StyleEditor {
 		panels[2].classList.add("bookbinder-style-flow");
 		const sample = this.sample();
 		const heading = /^h[1-6]$/.test(this.selected) || this.selected === "h1.title";
-		const positionedHeading = this.relativeUnits && heading && this.values()["page-position"] === "one-third";
+		const positionedHeading = this.options.format !== "docx" && heading && this.values()["page-position"] === "one-third";
 		const computed = this.frame.contentWindow!.getComputedStyle(sample, this.catalog.find(style => style.selector === this.selected)?.pseudo);
 		const field = (parent: HTMLElement, label: string) => {
 			const wrapper = this.makeEl("label"); wrapper.className = "bookbinder-toolbar-field";
@@ -381,7 +402,7 @@ export class StyleEditor {
 			if (focused) Array.from(header.querySelectorAll<HTMLElement>("[aria-label]")).find(element => element.getAttribute("aria-label") === focused)?.focus();
 			return;
 		}
-		if (this.relativeUnits && this.selected === "hr") {
+		if (this.options.format !== "docx" && this.selected === "hr") {
 			select(header, t("separatorAppearance"), { line: t("line"), characters: t("characters") }, this.presentation.separator === undefined ? "line" : "characters", value => {
 				if (value === "line") delete this.presentation.separator;
 				else this.presentation.separator = this.separatorCharacters;
@@ -398,8 +419,27 @@ export class StyleEditor {
 			}
 		}
 		const families: Record<string, string> = { "": t("auto"), serif: t("serif"), "sans-serif": t("sansSerif"), monospace: t("monospace") };
-		for (const filename of new Set([...this.presentation.fonts, ...this.fonts.keys()])) families[fontFamily(filename)] = fontFilename(filename);
-		select(type, t("font"), families, String(this.values()["font-family"] ?? ""), value => this.set("font-family", value || undefined));
+		const available = Array.from(new Set([...(this.options.fontLibrary?.() ?? []), ...this.presentation.fonts, ...this.fonts.keys()])).filter(filename => this.options.format !== "pdf" || /\.(otf|ttf)$/i.test(filename))
+			.sort((left, right) => fontFilename(left).localeCompare(fontFilename(right), getLocale()));
+		for (const filename of available) families[fontFamily(filename)] = fontLabel(filename, this.options.fontType?.(filename));
+		const fontInput = select(type, t("font"), families, String(this.values()["font-family"] ?? ""), value => {
+			const values = this.values();
+			const apply = () => {
+				if (this.disposed) return;
+				if (value) values["font-family"] = value;
+				else delete values["font-family"];
+				this.changed(); this.update();
+			};
+			const reference = available.find(filename => fontFamily(filename) === value);
+			if (!reference || this.fonts.has(reference) || !this.options.selectFont) { apply(); return; }
+			this.loadingFont = true; fontInput.disabled = true;
+			void this.options.selectFont(reference, apply).finally(() => {
+				this.loadingFont = false;
+				if (!this.disposed) this.renderToolbar();
+			});
+		});
+		fontInput.disabled = this.loadingFont;
+		this.sortFontChoices(fontInput);
 		if (this.relativeUnits && this.selected === "p" && !this.options.rules) {
 			const warning = this.makeEl("p"); warning.className = "bookbinder-font-warning";
 			warning.textContent = t("bodyFontWarning"); panels[0].append(warning);
@@ -450,9 +490,9 @@ export class StyleEditor {
 		for (const [property, label] of [["margin-top", t("topMargin")], ["margin-bottom", t("bottomMargin")], ["margin-left", t("leftMargin")], ["margin-right", t("rightMargin")], ["text-indent", t("firstLineIndent")]]) {
 			number(property === "text-indent" ? paragraph : margins, t("labelUnit", { label, unit }), property, length(property), this.relativeUnits ? -100 : -300, this.relativeUnits ? 100 : 300, unit);
 		}
-		if (this.relativeUnits) number(character, t("characterSpacingEm"), "letter-spacing", this.emValue("letter-spacing"), -5, 5, "em");
+		if (this.options.format !== "docx") number(character, t("labelUnit", { label: t("characterSpacing"), unit }), "letter-spacing", length("letter-spacing"), -5, 5, unit);
 		select(panels[2], t("display"), { "": t("auto"), block: t("visible"), none: t("hidden") }, this.values().display === undefined ? "" : this.values().display === "none" ? "none" : "block", value => this.set("display", value === "block" && ["SPAN", "A"].includes(sample.tagName) ? "inline" : value || undefined));
-		if (this.relativeUnits && heading) select(panels[2], t("headingPosition"), { "": t("auto"), "one-third": t("oneThirdPage") }, String(this.values()["page-position"] ?? ""), value => {
+		if (this.options.format !== "docx" && heading) select(panels[2], t("headingPosition"), { "": t("auto"), "one-third": t("oneThirdPage") }, String(this.values()["page-position"] ?? ""), value => {
 			this.set("page-position", value || undefined); this.renderToolbar();
 		});
 		select(panels[2], t("pageBreakBefore"), { "": t("auto"), always: t("yes"), auto: t("no") }, positionedHeading ? "always" : String(this.values()["page-break-before"] ?? ""), value => this.set("page-break-before", value || undefined)).disabled = positionedHeading;

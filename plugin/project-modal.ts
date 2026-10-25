@@ -7,9 +7,12 @@ import { loadFont, projectYaml, readProjectFile, saveProjectFile, type ImportedF
 import { StyleEditor } from "./style-editor";
 import { mountProjectTabs } from "./project-tabs";
 import { chooseFiles } from "./dialogs";
-import { listFontLibrary, resolveFont, saveLibraryFont } from "./font-library.ts";
-import { fontFamily, fontFilename, libraryFontPrefix } from "./presentation.ts";
+import { readFontLibrary, resolveFont } from "./font-library.ts";
+import { fontsInStyles } from "./presentation.ts";
 import { bindFilenameInput } from "./filename.ts";
+import type { FontType } from "./font-catalog.ts";
+import { pdfBaseCss } from "./pdf-presentation.ts";
+import { mountPaperFormat } from "./page-layout.ts";
 
 function record(value: unknown): Record<string, unknown> {
 	return value && typeof value === "object" && !Array.isArray(value) ? { ...value as Record<string, unknown> } : {};
@@ -24,13 +27,14 @@ export async function openProjectEditor(app: App, directory: string, baseCss: st
 
 class ProjectModal extends Modal {
 	private editor?: StyleEditor;
-	private ruleEditor?: StyleEditor;
+	private ruleEditors = new Map<string, StyleEditor>();
 	private editors = new Map<string, StyleEditor>();
-	private get styleEditors(): StyleEditor[] { return [...this.editors.values(), ...(this.ruleEditor ? [this.ruleEditor] : [])]; }
+	private get styleEditors(): StyleEditor[] { return [...this.editors.values(), ...this.ruleEditors.values()]; }
 	private projects: Record<"pdf" | "docx" | "epub", BookProject>;
 	private nestedTabs: { panels: HTMLElement[]; select: (index: number) => void }[] = [];
 	private error!: HTMLElement;
 	private libraryFonts: string[] = [];
+	private fontTypes = new Map<string, FontType | undefined>();
 	private dirty = false;
 	private discard = false;
 	private saving = false;
@@ -46,11 +50,10 @@ class ProjectModal extends Modal {
 		private data: Record<string, unknown>, private project: BookProject, private fontDirectory: string) {
 		super(app);
 		this.projects = {
-			pdf: parseProject({ epub: data.pdf }, path.basename(directory)),
-			docx: parseProject({ epub: data.docx }, path.basename(directory)),
+			pdf: parseProject(data, path.basename(directory), "pdf"),
+			docx: parseProject(data, path.basename(directory), "docx"),
 			epub: project,
 		};
-		for (const format of Object.values(this.projects)) format.fonts = project.fonts;
 		this.data.title ??= project.metadata.title;
 		this.data.lang ??= project.metadata.lang;
 	}
@@ -77,6 +80,10 @@ class ProjectModal extends Modal {
 			this.refreshFilename = bindFilenameInput(input.inputEl, this.data, this.project.metadata, () => this.markDirty());
 		});
 		this.metadata(information, "lang", t("language"), false, true);
+		const paper = information.createDiv({ cls: "bookbinder-paper-format" });
+		mountPaperFormat(paper, this.projects.pdf.page, () => {
+			this.markDirty(); this.editors.get("pdf")?.refresh(); this.ruleEditors.get("pdf")?.refresh();
+		});
 		const publication = information.createEl("details");
 		publication.createEl("summary", { text: t("publication") });
 		for (const [key, label] of [
@@ -89,54 +96,7 @@ class ProjectModal extends Modal {
 		cover.createEl("summary", { text: t("cover") });
 		this.image(cover, "cover", t("cover"), t("automatic"));
 		this.image(cover, "cover-background", t("backgroundImage"), t("noBackgroundImage"));
-		const fonts = information.createDiv({ cls: "bookbinder-fonts" });
-		fonts.createEl("h3", { text: t("fontLibrary") });
-		const fontList = fonts.createDiv({ cls: "bookbinder-font-list" });
 		let fontBusy = true;
-		const showFonts = () => {
-			fontList.empty();
-			if (!this.project.fonts.length) fontList.createDiv({ text: t("defaultFontsAuto"), cls: "bookbinder-muted" });
-			const available = Array.from(new Set([...this.libraryFonts, ...this.project.fonts])).sort((left, right) => fontFilename(left).localeCompare(fontFilename(right), getLocale()));
-			for (const filename of available) {
-				const row = fontList.createDiv({ cls: "bookbinder-font-row" });
-				row.createSpan({ text: fontFilename(filename) });
-				const selected = this.project.fonts.includes(filename);
-				const button = new ButtonComponent(row).setButtonText(selected ? t("remove") : t("use")).setDisabled(fontBusy)
-					.setTooltip(selected ? t("removeFromProjectWithoutDeletingTheFile") : t("useThisFontInTheProject"))
-					.onClick(() => this.action(async () => {
-						setFontBusy(true);
-						try {
-							if (selected) { for (const editor of this.styleEditors) editor.removeFont(filename); this.refreshFonts(); }
-							else await this.useFont(filename);
-							this.markDirty();
-						} finally { setFontBusy(false); if (!this.closed) importButton.buttonEl.focus(); }
-					}));
-				button.buttonEl.setAttribute("aria-label", t(selected ? "removeFontFromTheProject" : "useFontInTheProject", { font: fontFilename(filename) }));
-			}
-		};
-		showFonts();
-		const importButton = new ButtonComponent(fonts).setButtonText(t("importFonts")).setDisabled(true);
-		const setFontBusy = (busy: boolean) => {
-			fontBusy = busy;
-			if (this.closed) return;
-			importButton.setDisabled(busy).setButtonText(busy ? t("loadingFonts") : t("importFonts")); showFonts();
-		};
-		importButton.onClick(() => this.action(async () => {
-			setFontBusy(true);
-			try {
-				const filenames = await chooseFiles(t("chooseFonts"), ["otf", "ttf", "woff", "woff2"], true);
-				const loaded = await Promise.all(filenames.map(loadFont));
-				for (const font of loaded) {
-					const reference = await this.importFont(font);
-					if (this.closed) return;
-					if (!this.libraryFonts.includes(reference)) this.libraryFonts.push(reference);
-					await this.useFont(reference, font);
-					this.markDirty();
-					showFonts();
-				}
-			} finally { setFontBusy(false); }
-		}));
-		fonts.createEl("p", { text: t("fontLibraryDescription"), cls: "bookbinder-muted" });
 		const fusion = information.createEl("details");
 		fusion.createEl("summary", { text: t("fileAssembly") });
 		for (const [key, label] of [["excludeCharacters", t("charactersToExcludeFromNames")], ["excludeNames", t("namesToExcludeSeparatedByCommas")]] as const) {
@@ -168,31 +128,38 @@ class ProjectModal extends Modal {
 				this.markDirty();
 			});
 		});
+		const selectFont = (reference: string, apply: () => void): Promise<void> => this.action(async () => {
+			if (fontBusy) return;
+			fontBusy = true;
+			try { await this.loadProjectFont(reference); if (!this.closed) apply(); }
+			finally { fontBusy = false; }
+		});
 		for (const [index, format] of formats.entries()) {
 			const panel = formatPanels[index];
 			const tabs = panel.createDiv({ cls: "bookbinder-project-tabs", attr: { "aria-label": t("formatSettings", { format: format.toUpperCase() }) } });
 			panel.prepend(tabs);
 			const page = panel.createDiv({ cls: "bookbinder-project-page" });
 			const presentation = panel.createDiv({ cls: "bookbinder-project-presentation" });
-			page.createEl("h3", { text: t("page") });
+			page.createEl("h3", { text: t("margins") });
 			page.createEl("p", { text: format === "epub"
 				? t("epubPageDescription")
 				: t("autoKeepsTheTemplateMarginsValuesEnteredHereUseMillimetres"), cls: "bookbinder-muted" });
 			const pageFields = page.createDiv({ cls: "bookbinder-page-fields" });
 			presentation.createEl("h3", { text: t("styles") });
-			const editor = new StyleEditor(presentation, this.projects[format], this.baseCss, () => this.markDirty(), () => this.close(), { format, setIcon, sanitizeHTMLToDom });
+			const editor = new StyleEditor(presentation, this.projects[format], format === "pdf" ? pdfBaseCss : this.baseCss, () => this.markDirty(), () => this.close(), { format, setIcon, sanitizeHTMLToDom, fontLibrary: () => this.libraryFonts, fontType: reference => this.fontTypes.get(reference), selectFont });
 			this.editors.set(format, editor);
 			void editor.mountPage(pageFields);
 			const panels = [page, presentation];
 			const labels = [t("page"), t("styles")];
-			if (format === "epub") {
+			if (format !== "docx") {
 				const rules = panel.createDiv({ cls: "bookbinder-project-presentation" });
 				rules.createEl("h3", { text: t("afterAHeading") });
 				rules.createEl("p", { text: t("headingRuleDescription"), cls: "bookbinder-muted" });
-				this.ruleEditor = new StyleEditor(rules, this.project, this.baseCss, () => this.markDirty(), () => this.close(), { format, setIcon, sanitizeHTMLToDom, rules: true });
+				const ruleEditor = new StyleEditor(rules, this.projects[format], format === "pdf" ? pdfBaseCss : this.baseCss, () => this.markDirty(), () => this.close(), { format, setIcon, sanitizeHTMLToDom, rules: true, fontLibrary: () => this.libraryFonts, fontType: reference => this.fontTypes.get(reference), selectFont });
+				this.ruleEditors.set(format, ruleEditor);
 				panels.push(rules); labels.push(t("rules"));
 			}
-			const select = mountProjectTabs(tabs, panels, labels, () => { editor.refresh(); if (format === "epub") this.ruleEditor?.refresh(); });
+			const select = mountProjectTabs(tabs, panels, labels, () => { editor.refresh(); this.ruleEditors.get(format)?.refresh(); });
 			this.nestedTabs.push({ panels, select });
 		}
 		this.editor = this.editors.get("epub");
@@ -201,44 +168,38 @@ class ProjectModal extends Modal {
 		this.cancelButton = new ButtonComponent(footer).setButtonText(t("cancel")).onClick(() => this.close());
 		this.saveButton = new ButtonComponent(footer).setButtonText(t("saveProject")).setCta().onClick(() => this.action(() => this.save()));
 		void this.action(async () => {
-			setFontBusy(true);
 			try {
 				await Promise.all(this.styleEditors.map(editor => editor.ready));
 				if (this.closed) return;
 				if (this.project.css.length) {
 					const css = (await Promise.all(this.project.css.map(filename => readFile(localResource(this.directory, filename), "utf8")))).join("\n");
-					this.editor!.setBaseCss(css); this.ruleEditor?.setBaseCss(css);
+					this.editor!.setBaseCss(css); this.ruleEditors.get("epub")?.setBaseCss(css);
 				}
-				this.libraryFonts = await listFontLibrary(this.fontDirectory);
-				for (const filename of [...this.project.fonts]) {
+				await this.loadFontLibrary();
+				for (const format of Object.values(this.projects)) format.fonts = fontsInStyles(format, this.libraryFonts);
+				for (const filename of new Set(Object.values(this.projects).flatMap(format => format.fonts))) {
 					const font = await loadFont(resolveFont(this.directory, filename, this.fontDirectory));
-					const reference = filename.startsWith(libraryFontPrefix) ? filename : await this.importFont(font);
-					if (!this.libraryFonts.includes(reference)) this.libraryFonts.push(reference);
-					await this.useFont(reference, font);
-					if (reference !== filename) this.project.fonts.splice(this.project.fonts.indexOf(filename), 1);
+					await this.loadProjectFont(filename, font);
 				}
 				this.refreshFonts();
-			} finally { setFontBusy(false); }
+			} finally { fontBusy = false; }
 		});
 		this.contentEl.querySelector<HTMLTextAreaElement>("textarea")?.focus();
 	}
 
 	private refreshFonts(): void {
-		for (const editor of this.styleEditors) { editor.presentation.fonts = this.project.fonts; editor.refreshFonts(); }
+		for (const editor of this.styleEditors) editor.refreshFonts();
 	}
 
-	private async importFont(font: ImportedFont): Promise<string> {
-		try { await new FontFace(fontFamily(font.name), new Uint8Array(font.data).buffer).load(); }
-		catch { throw new Error(t("theFontFontCouldNotBeLoadedChooseAValidFontFile", { font: font.name })); }
-		return saveLibraryFont(this.fontDirectory, font);
+	private async loadFontLibrary(): Promise<void> {
+		const fonts = await readFontLibrary(this.fontDirectory);
+		this.libraryFonts = fonts.map(font => font.reference);
+		this.fontTypes = new Map(fonts.map(font => [font.reference, font.type]));
 	}
 
-	private async useFont(reference: string, font?: ImportedFont): Promise<void> {
+	private async loadProjectFont(reference: string, font?: ImportedFont): Promise<void> {
 		font ??= await loadFont(resolveFont(this.directory, reference, this.fontDirectory));
 		for (const editor of this.styleEditors) await editor.addFont(reference, font.data);
-		if (this.closed) return;
-		if (!this.project.fonts.includes(reference)) this.project.fonts.push(reference);
-		this.refreshFonts();
 	}
 
 	private metadata(container: HTMLElement, key: string, label: string, multiline = false, required = false): void {
@@ -272,7 +233,6 @@ class ProjectModal extends Modal {
 				if (key === "subject") value = input.value.split(",").map(item => item.trim()).filter(Boolean);
 				this.data[key] = value;
 				if (key === "title" || key === "author") this.refreshFilename();
-				if (key === "author-url") delete this.data.author_url;
 				this.markDirty();
 			});
 		};
@@ -327,21 +287,21 @@ class ProjectModal extends Modal {
 			invalid.reportValidity(); invalid.focus(); return;
 		}
 		const data: Record<string, unknown> = { ...this.data, fusion: this.project.fusion };
-		this.ruleEditor?.normalizeUnits();
+		for (const editor of this.ruleEditors.values()) editor.normalizeUnits();
 		for (const [format, editor] of this.editors) {
 			editor.normalizeUnits();
 			const presentation = editor.presentation;
-			const settings: Record<string, unknown> = { ...record(this.data[format]), style: presentation.style, page: presentation.page,
+			const settings: Record<string, unknown> = { ...record(this.data[format]), fonts: presentation.fonts, style: presentation.style, page: presentation.page,
 				headings: Object.fromEntries(Object.entries(presentation.headings).filter(([, values]) => Object.keys(values).length)),
 				styles: Object.fromEntries(Object.entries(presentation.styles ?? {}).filter(([, values]) => Object.keys(values).length)),
 				"disabled-rules": presentation.disabledRules ?? [],
 				rules: Object.fromEntries(Object.entries(presentation.rules ?? {}).filter(([, values]) => Object.keys(values).length)) };
-			if (format === "epub") {
+			if (format !== "docx") {
 				delete settings.separator;
 				if (presentation.separator !== undefined) settings.separator = presentation.separator;
 			}
-			data[format] = format === "epub" ? { ...settings, fonts: this.project.fonts, css: this.project.css } : settings;
-			parseProject({ epub: data[format] }, path.basename(this.directory));
+			data[format] = format === "epub" ? { ...settings, css: this.project.css } : settings;
+			parseProject(data, path.basename(this.directory), format as "epub" | "pdf" | "docx");
 		}
 		parseProject(data, path.basename(this.directory));
 		this.saving = true;

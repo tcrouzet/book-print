@@ -6,7 +6,8 @@ import * as path from "node:path";
 import { prepareMarkdown, projectCss, localResource, isProjectNote, noteSeparators, type BookProject } from "./project";
 import type { CoverOptions } from "./cover";
 import { saveGeneratedFile, type ExistingOutputChoice } from "./output";
-import { resolveFont } from "./font-library.ts";
+import { listFontLibrary, resolveFont } from "./font-library.ts";
+import { fontsInStyles } from "./presentation.ts";
 
 export interface BookSource { path: string; content: string }
 
@@ -23,7 +24,7 @@ export interface EpubRequest {
 	fontDirectory?: string;
 }
 
-function runPandoc(executable: string, args: string[], cwd: string, input: string): Promise<void> {
+export function runPandoc(executable: string, args: string[], cwd: string, input: string): Promise<void> {
 	return new Promise((resolve, reject) => {
 		const child = spawn(executable, args, { cwd, windowsHide: true, stdio: ["pipe", "ignore", "pipe"] });
 		let errorText = "";
@@ -45,11 +46,10 @@ function runPandoc(executable: string, args: string[], cwd: string, input: strin
 	});
 }
 
-export async function exportEpub(request: EpubRequest): Promise<string | undefined> {
-	const { project, directory, output, resources } = request;
+export function prepareBookSources(request: Pick<EpubRequest, "sources" | "project" | "resolveImage">): { sources: { directory: string; content: string }[]; pageBreak?: string } {
+	const { project } = request;
 	const manuscript = request.sources.filter(source => !isProjectNote(source.path.replace(/\\/g, "/")));
 	if (!manuscript.length) throw new Error(t("noMarkdownFilesToExport"));
-	if (!path.isAbsolute(output) || path.extname(output).toLowerCase() !== ".epub") throw new Error(t("theOutputPathMustNameAnEpubFile"));
 	const pageBreak = noteSeparators.get(project.fusion.noteSeparator)?.pageBreak || undefined;
 	const customSeparator = pageBreak ? "" : project.fusion.noteSeparator;
 	const sources = manuscript.map((source, index) => {
@@ -62,6 +62,14 @@ export async function exportEpub(request: EpubRequest): Promise<string | undefin
 		});
 		return { directory: path.dirname(source.path), content: content + "\n\n" + (index < manuscript.length - 1 ? customSeparator : "") };
 	});
+	return { sources, pageBreak };
+}
+
+export async function exportEpub(request: EpubRequest): Promise<string | undefined> {
+	const { directory, output, resources } = request;
+	const project = { ...request.project, fonts: fontsInStyles(request.project, request.fontDirectory ? await listFontLibrary(request.fontDirectory) : []) };
+	const { sources, pageBreak } = prepareBookSources({ ...request, project });
+	if (!path.isAbsolute(output) || path.extname(output).toLowerCase() !== ".epub") throw new Error(t("theOutputPathMustNameAnEpubFile"));
 	const fonts = project.fonts.map(filename => resolveFont(directory, filename, request.fontDirectory));
 	const cssFiles = project.css.map(filename => localResource(directory, filename));
 	const cover = project.cover ? localResource(directory, project.cover) : undefined;
@@ -116,7 +124,7 @@ export async function exportEpub(request: EpubRequest): Promise<string | undefin
 		const result = path.join(temporary, "book.epub");
 		args.push(`--metadata-file=${path.join(temporary, "metadata.json")}`, `--epub-cover-image=${coverFile}`, `--output=${result}`);
 		await runPandoc(request.pandoc, args, directory, JSON.stringify({ sources, pageBreak, disabledRules: project.disabledRules, separator: project.separator,
-			colophon: metadata.colophon ?? "", colophonCredit: t("generatedByBookbinderOn", { date: now.toLocaleDateString(bookLocale) }, bookLocale) }));
+			colophon: metadata.colophon ?? "", colophonTitle: t("colophon", {}, bookLocale), colophonCredit: t("generatedByBookbinderOn", { date: now.toLocaleDateString(bookLocale) }, bookLocale) }));
 		return await saveGeneratedFile(result, output, request.confirmOverwrite);
 	} finally {
 		await rm(temporary, { recursive: true, force: true });

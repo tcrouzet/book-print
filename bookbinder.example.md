@@ -19,9 +19,14 @@ fusion:
   noteSeparator: ''
 
 pdf:
-  page: {}
+  page:
+    paper-size: a5
+    page-mode: single
+    binding-offset: 0mm
   style: {}
   headings: {}
+  styles: {}
+  rules: {}
 
 docx:
   page: {}

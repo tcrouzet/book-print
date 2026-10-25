@@ -51,11 +51,13 @@
 }
 
 .bookbinder-project-information { min-width: 0; padding-right: var(--size-4-2); }
-.bookbinder-settings .setting-item, .bookbinder-project-modal .setting-item { border: 0; }
+.bookbinder-settings .setting-item, .bookbinder-project-modal .setting-item, .bookbinder-font-import-modal .setting-item { border: 0; }
 .bookbinder-project-panel[hidden] { display: none; }
 .bookbinder-project-tabs { display: flex; flex-wrap: wrap; gap: var(--size-4-1); margin-bottom: var(--size-4-2); }
 .bookbinder-project-tabs [aria-selected="true"] { background: var(--interactive-accent); color: var(--text-on-accent); }
-.bookbinder-page-fields { display: flex; flex-direction: column; gap: var(--size-4-2); }
+.bookbinder-page-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--size-4-2) var(--size-4-4); }
+.bookbinder-page-fields[hidden] { display: none; }
+.bookbinder-paper-format { display: grid; gap: var(--size-4-2); margin-block: var(--size-4-2); }
 .bookbinder-page-field { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--size-4-2); }
 .bookbinder-page-field input { width: 7em; height: var(--input-height, 28px); }
 
@@ -85,16 +87,6 @@
 	font-weight: var(--font-semibold);
 	padding-block: var(--size-4-2);
 }
-
-.bookbinder-font-list {
-	display: grid;
-	gap: var(--size-4-1);
-	margin-bottom: var(--size-4-2);
-	overflow-wrap: anywhere;
-}
-
-.bookbinder-font-row { display: flex; align-items: center; justify-content: space-between; gap: var(--size-4-2); }
-.bookbinder-font-row span { min-width: 0; overflow-wrap: anywhere; }
 
 .bookbinder-project-format { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .bookbinder-project-presentation { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; overflow: auto; }
@@ -186,11 +178,7 @@
 .nav-files-container .nav-file-title[data-path="bookbinder.md" i],
 .nav-files-container .nav-file-title[data-path$="/bookbinder.md" i],
 .nav-files-container .nav-file-title[data-path="bookbinder.md" i] .nav-file-title-content,
-.nav-files-container .nav-file-title[data-path$="/bookbinder.md" i] .nav-file-title-content,
-.nav-files-container .nav-file-title[data-path="book-print.md" i],
-.nav-files-container .nav-file-title[data-path$="/book-print.md" i],
-.nav-files-container .nav-file-title[data-path="book-print.md" i] .nav-file-title-content,
-.nav-files-container .nav-file-title[data-path$="/book-print.md" i] .nav-file-title-content {
+.nav-files-container .nav-file-title[data-path$="/bookbinder.md" i] .nav-file-title-content {
 	color: var(--text-accent);
 }
 

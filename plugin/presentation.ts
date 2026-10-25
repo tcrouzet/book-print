@@ -9,15 +9,31 @@ export function fontFilename(filename: string): string {
 
 export function fontFamily(filename: string): string {
 	const name = fontFilename(filename);
-	// Ces identifiants de polices sont conservés dans les propriétés des anciens projets.
+	// This namespace is stored in current project styles.
 	return "BookPrint-" + Array.from(name).map(character => character.codePointAt(0)!.toString(16)).join("-");
 }
 
-export type Presentation = Pick<BookProject, "style" | "headings" | "fonts"> & Partial<Pick<BookProject, "page" | "styles" | "rules" | "disabledRules" | "separator">>;
+export type Presentation = Pick<BookProject, "style" | "headings" | "fonts"> & Partial<Pick<BookProject, "css" | "page" | "styles" | "rules" | "disabledRules" | "separator">>;
+
+export function fontFamiliesInStyles(project: Presentation): Set<string> {
+	return new Set([project.style, ...Object.values(project.headings), ...Object.values(project.styles ?? {}), ...Object.values(project.rules ?? {})]
+		.flatMap(style => typeof style["font-family"] === "string" ? style["font-family"].split(",").map(family => family.trim().replace(/^(["'])(.*)\1$/, "$2")) : []));
+}
+
+export function fontsInStyles(project: Presentation, available: readonly string[] = []): string[] {
+	const families = fontFamiliesInStyles(project);
+	const files = new Map<string, string>();
+	for (const reference of [...project.fonts, ...available]) {
+		const family = fontFamily(reference);
+		// Custom stylesheets can declare their own font resources.
+		if ((families.has(family) || project.css?.length && project.fonts.includes(reference)) && !files.has(family)) files.set(family, reference);
+	}
+	return [...files.values()];
+}
 
 export function projectCss(project: Presentation): string {
 	const declarations = (values: Record<string, string | number>) => Object.entries(values)
-		.filter(([name]) => name !== "page-margin" && name !== "page-position").map(([name, value]) => `${name}:${value}`).join(";");
+		.filter(([name]) => name !== "page-position").map(([name, value]) => `${name}:${value}`).join(";");
 	const rule = (selector: string, values: Record<string, string | number>) => {
 		const style = [declarations(values), values["page-position"] === "one-third"
 			? "page-break-before:always;break-before:page;margin-top:0;padding-top:33.3333vh" : ""].filter(Boolean).join(";");
@@ -26,14 +42,11 @@ export function projectCss(project: Presentation): string {
 	const body = Object.fromEntries(Object.entries(project.style).filter(([name]) => ["font-family", "font-size", "line-height", "color"].includes(name)));
 	const paragraph = { ...project.style };
 	if (paragraph["font-size"] !== undefined) paragraph["font-size"] = "inherit";
-	const page = [
-		project.style["page-margin"] !== undefined ? "margin:" + project.style["page-margin"] : "",
-		declarations(project.page ?? {}),
-	].filter(Boolean).join(";");
+	const page = declarations(project.page ?? {});
 	return [
 		'div[class^="bookbinder-after-heading-"]{display:none}',
 		'h1.bookbinder-colophon-boundary,.bookbinder-colophon-boundary>h1:first-child{display:none}',
-		'.bookbinder-credit{margin-top:3em;font-size:0.8em}.bookbinder-credit p{margin:0;text-indent:0;text-align:center}',
+		'.bookbinder-credit{margin-top:3em;font-size:0.8em}.bookbinder-credit p,.bookbinder-colophon .bookbinder-credit p{margin:0;text-indent:0;text-align:center}',
 		...project.fonts.map(filename => {
 			const name = fontFilename(filename);
 			return `@font-face{font-family:"${fontFamily(name)}";src:url("../fonts/${encodeURIComponent(name)}")}`;

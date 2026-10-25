@@ -57,7 +57,7 @@ const directory = new URL("../plugin/", import.meta.url);
 for (const filename of (await readdir(directory)).filter(name => name.endsWith(".ts"))) {
 	const source = ts.createSourceFile(filename, await readFile(new URL(filename, directory), "utf8"), ts.ScriptTarget.Latest, true);
 	const visit = (node: ts.Node) => {
-		if (ts.isStringLiteralLike(node) && /[àâçéèêëîïôùûüœ]/i.test(node.text) && node.text !== "#dédicace p") {
+		if (ts.isStringLiteralLike(node) && /[àâçéèêëîïôùûüœ]/i.test(node.text)) {
 			assert.fail(`Untranslated French text in ${filename}: ${node.text}`);
 		}
 		if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "t" && node.arguments[0] && ts.isStringLiteralLike(node.arguments[0])) {
@@ -72,7 +72,7 @@ try {
 	const folder = path.join(temporary, "locales");
 	assert.deepEqual(await loadTranslationFiles(folder), []);
 	for (const language of ["en", "fr"]) assert.deepEqual(JSON.parse(await readFile(path.join(folder, language + ".json"), "utf8")), language === "en" ? en : fr);
-	const editedFrench = JSON.stringify({ bodyText: "Mon texte courant", bodyFontWarning: "Mon avertissement modifié", generatedByBookbinder: "Ancien crédit personnalisé" }, null, 4);
+	const editedFrench = JSON.stringify({ bodyText: "Mon texte courant", bodyFontWarning: "Mon avertissement modifié" }, null, 4);
 	const editedEnglish = JSON.stringify({ bodyText: "My body text" });
 	await writeFile(path.join(folder, "fr.json"), editedFrench);
 	await writeFile(path.join(folder, "en.json"), editedEnglish);
@@ -81,7 +81,7 @@ try {
 	assert.equal(t("bodyText"), "Mon texte courant");
 	assert.equal(bookStyles[0].label, "Mon texte courant");
 	assert.equal(t("bodyFontWarning"), "Mon avertissement modifié");
-	assert.ok(t("generatedByBookbinderOn", { date: "DATE_SENTINEL" }).includes("DATE_SENTINEL"), "An older custom catalogue keeps its edits and falls back to the new dated credit");
+	assert.ok(t("generatedByBookbinderOn", { date: "DATE_SENTINEL" }).includes("DATE_SENTINEL"), "A partial custom catalogue keeps its edits and uses the bundled credit");
 	assert.equal(t("font"), fr.font, "Missing keys keep the bundled translation");
 	setLocale("en");
 	assert.equal(t("bodyText"), "My body text", "Both language files are read after editing, without rebuilding");

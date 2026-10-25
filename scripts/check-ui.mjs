@@ -18,14 +18,14 @@ const settingsClass = settingsSource.statements.find(node => ts.isClassDeclarati
 const definitionsMethod = settingsClass.members.find(node => ts.isMethodDeclaration(node) && node.name.getText(settingsSource) === "getSettingDefinitions");
 const definitions = new Function("t", definitionsMethod.body.getText(settingsSource)).call(new Proxy({}, { get() { throw new Error("Settings indexing must not access the app or run I/O"); } }), t);
 const indexedSettings = definitions.flatMap(group => group.items);
-for (const name of ["Projet de livre", "Cloner un projet", "Dossier de génération", "Pandoc", "LaTeX", "Chemins personnalisés", "Package de polices"]) {
+for (const name of ["Projet de livre", "Cloner un projet", "Dossier de génération", "Pandoc", "LaTeX", "Chemins personnalisés", "Bibliothèque de polices", "Package de polices"]) {
  assert.ok(indexedSettings.some(setting => setting.name === name && typeof setting.render === "function"), "Searchable setting: " + name);
 }
 for (const language of ["en", "de-DE"]) {
 	setLocale(language);
 	const englishDefinitions = new Function("t", definitionsMethod.body.getText(settingsSource)).call(new Proxy({}, { get() { throw new Error("Settings indexing must not access the app or run I/O"); } }), t);
 	const names = englishDefinitions.flatMap(group => group.items.map(setting => setting.name));
-	for (const name of ["Book project", "Clone a project", "Output folder", "Custom paths", "Font package"]) assert.ok(names.includes(name), "English searchable setting: " + name);
+	for (const name of ["Book project", "Clone a project", "Output folder", "Custom paths", "Font library", "Font package"]) assert.ok(names.includes(name), "English searchable setting: " + name);
 }
 setLocale("fr");
 const directory = await mkdtemp(path.join(tmpdir(), "bookbinder-ui-"));
@@ -39,7 +39,7 @@ setCoreLocale("fr");
 const fontPath = process.env.BOOKBINDER_TEST_FONT || "/System/Library/Fonts/Supplemental/Times New Roman.ttf";
 const font = await loadFont(fontPath);
 const browser = await build({
-	stdin: { contents: 'export * from "./plugin/i18n.ts"; export * from "./plugin/filename.ts"; export * from "./plugin/font-catalog.ts"; export { StyleEditor } from "./plugin/style-editor.ts"; export { mountProjectTabs } from "./plugin/project-tabs.ts"; export { renderCover } from "./plugin/cover.ts"; export { fontFamily } from "./plugin/presentation.ts"; export { linkProjectNote } from "./plugin/project-view.ts";', resolveDir: root },
+	stdin: { contents: 'export * from "./plugin/i18n.ts"; export * from "./plugin/filename.ts"; export * from "./plugin/font-catalog.ts"; export { StyleEditor } from "./plugin/style-editor.ts"; export * from "./plugin/page-layout.ts"; export { pdfBaseCss } from "./plugin/pdf-presentation.ts"; export { mountProjectTabs } from "./plugin/project-tabs.ts"; export { renderCover } from "./plugin/cover.ts"; export { fontFamily } from "./plugin/presentation.ts"; export { linkProjectNote } from "./plugin/project-view.ts";', resolveDir: root },
 	bundle: true, format: "iife", globalName: "BookUI", write: false,
 });
 const styles = await readFile(path.join(root, "styles.css"), "utf8");
@@ -55,14 +55,19 @@ const check = async assets => {
 	BookUI.mountFontCatalog(catalogue, makeEl);
 	assert(catalogue.querySelector("summary").textContent === "Consulter le catalogue des polices", "Le catalogue suit la langue d’Obsidian");
 	assert(!catalogue.querySelector("details").open && catalogue.querySelectorAll("details").length === 23, "Les notices sont repliées par défaut, avec une entrée par famille");
+	assert(!catalogue.querySelector("h4"), "Une liste unique remplace les catégories Corps et Titres");
+	const familyLabels = Array.from(catalogue.querySelectorAll(".bookbinder-font-family > summary"), item => item.textContent);
+	assert(familyLabels.join("|") === familyLabels.slice().sort((left, right) => left.localeCompare(right, "fr")).join("|"), "Les familles sont classées alphabétiquement dans une seule liste");
 	for (const family of BookUI.fontCatalog.families) {
-		const item = Array.from(catalogue.querySelectorAll(".bookbinder-font-family")).find(element => element.querySelector("summary").textContent === family.name);
+		const item = Array.from(catalogue.querySelectorAll(".bookbinder-font-family")).find(element => element.querySelector("summary").textContent === family.name + " (" + BookUI.fontTypeLabel(family.category) + ")");
 		assert(item && item.textContent.includes(family.usage.fr) && item.querySelector('a[href="' + family.source + '"]') && item.querySelector('a[href="' + family.licenseUrl + '"]'), "Usage, licence et source de " + family.name);
 	}
 	catalogue.querySelector("details").open = true;
 	assert(catalogue.querySelector("summary").getBoundingClientRect().height > 0, "Le catalogue natif reste accessible au clavier");
 	BookUI.setLocale("en"); catalogue.replaceChildren(); BookUI.mountFontCatalog(catalogue, makeEl);
 	assert(catalogue.querySelector("summary").textContent === "Browse the font catalogue" && catalogue.textContent.includes(BookUI.fontCatalog.families[0].usage.en), "Les notices anglaises sont disponibles");
+	catalogue.replaceChildren(); BookUI.mountFontCatalog(catalogue, makeEl, [{ reference: "library:MyFont.ttf", type: "symbol" }]);
+	assert(Array.from(catalogue.querySelectorAll(".bookbinder-font-family > summary")).some(item => item.textContent === "MyFont.ttf (Symbol)"), "Une police personnelle est incluse dans le même catalogue avec son type");
 	catalogue.remove(); BookUI.setLocale("fr");
 	for (const [index, font] of assets.packageFonts.entries()) {
 		const bytes = Uint8Array.from(atob(font.data), character => character.charCodeAt(0));
@@ -89,10 +94,9 @@ const check = async assets => {
 	assert(projectLink.protocol === "obsidian:" && projectLink.hostname === "bookbinder", "Lien d’ouverture du projet");
 	assert(projectLink.searchParams.get("file") === "Livres/L’été & nous/bookbinder.md" && projectLink.searchParams.get("vault") === "Mon coffre", "Chemin et coffre du projet rendu");
 	assert(note.querySelectorAll("a")[1].getAttribute("href") === "https://example.org", "Autres liens préservés");
-	const legacyNote = document.createElement("div"); legacyNote.innerHTML = '<a href="obsidian://book-print">Modifier</a>';
-	BookUI.linkProjectNote(legacyNote, "Livres/book-print.md", "Mon coffre");
-	const legacyLink = new URL(legacyNote.querySelector("a").href);
-	assert(legacyLink.hostname === "bookbinder" && legacyLink.searchParams.get("file") === "Livres/book-print.md", "Ancien lien et ancienne note de projet compatibles");
+	const unsupportedNote = document.createElement("div"); unsupportedNote.innerHTML = '<a href="obsidian://book-print">Modifier</a>';
+	BookUI.linkProjectNote(unsupportedNote, "Livres/bookbinder.md", "Mon coffre");
+	assert(unsupportedNote.querySelector("a").getAttribute("href") === "obsidian://book-print", "Only the current protocol is handled");
 	const normalNote = document.createElement("div"); normalNote.innerHTML = '<a href="obsidian://bookbinder">Modifier</a>';
 	BookUI.linkProjectNote(normalNote, "chapitre.md", "Mon coffre");
 	assert(normalNote.querySelector("a").getAttribute("href") === "obsidian://bookbinder", "Seule la note de projet est transformée");
@@ -107,7 +111,7 @@ const check = async assets => {
 	document.documentElement.style.setProperty("--text-error", "#b00020");
 	assert(getComputedStyle(explorer.querySelector("span")).color === "rgb(109, 40, 217)", "Projet Markdown dans la couleur d’accentuation");
 	explorer.querySelector(".nav-file-title").dataset.path = "Livres/book-print.md";
-	assert(getComputedStyle(explorer.querySelector("span")).color === "rgb(109, 40, 217)", "Ancienne note de projet dans la couleur d’accentuation");
+	assert(getComputedStyle(explorer.querySelector("span")).color !== "rgb(109, 40, 217)", "Only bookbinder.md is highlighted as a project");
 	explorer.remove();
 	const title = document.createElement("h1"); title.textContent = "Présentation du livre"; document.body.append(title);
 	const host = document.createElement("section"); host.className = "bookbinder-project-modal"; host.style.width = "800px"; host.style.height = "760px"; document.body.append(host);
@@ -115,6 +119,20 @@ const check = async assets => {
 	const layout = document.createElement("div"); layout.className = "bookbinder-project-layout"; host.append(layout);
 	const panels = ["bookbinder-project-information", "bookbinder-project-format", "bookbinder-project-format", "bookbinder-project-format"].map(name => { const panel = document.createElement("div"); panel.className = name; layout.append(panel); return panel; });
 	panels[0].textContent = "Généralités du livre";
+	const paper = document.createElement("div"); paper.className = "bookbinder-paper-format"; panels[0].append(paper);
+	let refreshPaper = () => {};
+	const paperPage = {}; BookUI.mountPaperFormat(paper, paperPage, () => refreshPaper(), makeEl);
+	const paperSelect = paper.querySelector("select");
+	assert(paperSelect.value === "a5" && paperPage["paper-size"] === "a5", "Le format PDF par défaut est A5");
+	assert(Array.from(paperSelect.options, option => option.textContent).join("|") === "A4|A5|Personnalisé", "Les formats papier proposés");
+	paperSelect.value = "custom"; paperSelect.dispatchEvent(new Event("change"));
+	const customWidth = paper.querySelector('[aria-label="Largeur (mm)"]'); customWidth.value = "162.5"; customWidth.dispatchEvent(new Event("input"));
+	assert(paperPage["paper-width"] === "162.5mm" && paperPage["paper-height"] === "210mm", "Les dimensions personnalisées sont enregistrées en mm");
+	assert(getComputedStyle(paper.querySelector(".bookbinder-page-fields")).gridTemplateColumns.split(" ").length === 2, "Deux dimensions par ligne");
+	paperSelect.value = "a4"; paperSelect.dispatchEvent(new Event("change"));
+	assert(paper.querySelector(".bookbinder-page-fields").hidden, "Les dimensions sont réservées au format personnalisé");
+	paperSelect.value = "custom"; paperSelect.dispatchEvent(new Event("change"));
+	assert(paper.querySelector('[aria-label="Largeur (mm)"]').value === "162.5", "Changer de format préserve les dimensions personnalisées");
 	const formatPanels = panels.slice(1).map((panel, index) => {
 		const tabs = document.createElement("div"); tabs.className = "bookbinder-project-tabs"; panel.append(tabs);
 		const children = ["bookbinder-project-page", "bookbinder-project-presentation", ...(index === 2 ? ["bookbinder-project-presentation"] : [])].map(name => { const child = document.createElement("div"); child.className = name; panel.append(child); return child; });
@@ -125,24 +143,51 @@ const check = async assets => {
 	const presentation = { style: {}, page: {}, headings: {}, fonts: [] };
 	let changed = 0;
 	let closeRequested = 0;
-	const editor = new BookUI.StyleEditor(container, presentation, assets.baseCss, () => changed++, () => closeRequested++, { sanitizeHTMLToDom: parseSample, createEl: makeEl });
+	const libraryFonts = assets.packageFonts.map(font => "library:" + font.path.split("/").pop());
+	let fontSelection;
+	const fontRequests = [];
+	const editor = new BookUI.StyleEditor(container, presentation, assets.baseCss, () => changed++, () => closeRequested++, {
+		sanitizeHTMLToDom: parseSample, createEl: makeEl, fontLibrary: () => libraryFonts, fontType: reference => reference === "library:" + assets.fontName ? "serif" : undefined,
+		selectFont: (reference, apply) => fontSelection = (async () => {
+			fontRequests.push(reference);
+			const asset = assets.packageFonts.find(font => "library:" + font.path.split("/").pop() === reference);
+			assert(asset, "Le choix provient de la bibliothèque installée");
+			await editor.addFont(reference, Uint8Array.from(atob(asset.data), character => character.charCodeAt(0)));
+			apply();
+		})(),
+	});
 	await editor.ready;
+	const installedChoices = Array.from(container.querySelector('[aria-label="Police"]').options, option => option.value);
+	assert(libraryFonts.every(reference => installedChoices.includes(BookUI.fontFamily(reference))), "Toutes les polices installées doivent être proposées dans les styles sans activation préalable dans Généralités");
+	assert(presentation.fonts.length === 0 && presentation.style["font-family"] === undefined, "Afficher la bibliothèque conserve le corps en Auto et ne sélectionne aucune police");
+	for (const family of BookUI.fontCatalog.families) for (const filename of family.files) {
+		const option = Array.from(container.querySelector('[aria-label="Police"]').options).find(item => item.value === BookUI.fontFamily(filename));
+		assert(option.textContent.endsWith("(" + BookUI.fontTypeLabel(family.category) + ")"), "Chaque nom de police est suivi de son type : " + filename);
+	}
 	await editor.mountPage(formatPanels[2].children[0]);
 	const rulesPanel = formatPanels[2].children[2];
-	const ruleEditor = new BookUI.StyleEditor(rulesPanel, presentation, assets.baseCss, () => changed++, undefined, { sanitizeHTMLToDom: parseSample, createEl: makeEl, format: "epub", rules: true });
+	const ruleEditor = new BookUI.StyleEditor(rulesPanel, presentation, assets.baseCss, () => changed++, undefined, { sanitizeHTMLToDom: parseSample, createEl: makeEl, format: "epub", rules: true, fontLibrary: () => libraryFonts });
 	await ruleEditor.ready;
+	assert(libraryFonts.every(reference => Array.from(rulesPanel.querySelector('[aria-label="Police"]').options).some(option => option.value === BookUI.fontFamily(reference))), "Les règles proposent également toute la bibliothèque");
 	const otherEditors = [];
 	for (const [index, format] of formatPanels.slice(0, 2).entries()) {
-		const independent = new BookUI.StyleEditor(format.children[1], { style: {}, page: {}, headings: {}, fonts: [] }, assets.baseCss, () => changed++, undefined, { sanitizeHTMLToDom: parseSample, createEl: makeEl, format: index === 0 ? "pdf" : "docx" });
-		await independent.ready; await independent.mountPage(format.children[0]); otherEditors.push(independent);
+		const independent = new BookUI.StyleEditor(format.children[1], { style: {}, page: index === 0 ? paperPage : {}, headings: {}, fonts: [] }, index === 0 ? BookUI.pdfBaseCss : assets.baseCss, () => changed++, undefined, { sanitizeHTMLToDom: parseSample, createEl: makeEl, format: index === 0 ? "pdf" : "docx" });
+		await independent.ready;
+		const marginFields = document.createElement("div"); marginFields.className = "bookbinder-page-fields"; format.children[0].append(marginFields);
+		await independent.mountPage(marginFields); otherEditors.push(independent);
 	}
+	refreshPaper = () => otherEditors[0].refresh();
 	for (const [index, format] of formatPanels.entries()) BookUI.mountProjectTabs(format.tabs, format.children, index === 2 ? ["Page", "Styles", "Règles"] : ["Page", "Styles"], () => { (index === 2 ? editor : otherEditors[index]).refresh(); if (index === 2) ruleEditor.refresh(); }, makeEl);
 	BookUI.mountProjectTabs(navigation, panels, ["Généralités", "PDF", "DOCX", "ePub"], () => editor.refresh(), makeEl);
 	assert(!panels[0].hidden && panels.slice(1).every(panel => panel.hidden), "Les généralités doivent apparaître seules en premier");
 	assert(getComputedStyle(layout).display === "block" && getComputedStyle(host).resize === "both", "Fenêtre en une colonne et redimensionnable");
+	const pdfStyles = Array.from(formatPanels[0].children[1].querySelector('[aria-label="Style"]').options, option => option.value);
+	assert(pdfStyles.includes("h1.title") && pdfStyles.includes("p.tab") && pdfStyles.includes(".bookbinder-colophon p"), "Le PDF propose les styles Markdown du même éditeur que l’EPUB");
 	const tabs = navigation.querySelectorAll("button");
 	tabs[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
 	assert(!panels[1].hidden && document.activeElement === tabs[1], "Navigation clavier vers PDF");
+	const marginBoxes = Array.from(formatPanels[0].children[0].querySelectorAll("label"), label => label.getBoundingClientRect());
+	assert(Math.abs(marginBoxes[0].y - marginBoxes[1].y) < 1 && Math.abs(marginBoxes[2].y - marginBoxes[3].y) < 1 && marginBoxes[2].y > marginBoxes[0].y, "Les marges s’affichent deux par ligne");
 	assert(Array.from(tabs, tab => tab.textContent).join("|") === "Généralités|PDF|DOCX|ePub", "Onglets par format");
 	for (const index of [1, 2, 3]) {
 		tabs[index].click();
@@ -157,6 +202,19 @@ const check = async assets => {
 	tabs[1].click(); formatPanels[0].tabs.querySelectorAll("button")[0].click();
 	const pdfMargin = formatPanels[0].children[0].querySelector("input"); pdfMargin.value = "19"; pdfMargin.dispatchEvent(new Event("input", { bubbles: true }));
 	assert(otherEditors[0].presentation.page["margin-top"] === "19mm" && otherEditors[1].presentation.page["margin-top"] === undefined && presentation.page["margin-top"] === undefined, "Marges PDF, DOCX et ePub indépendantes");
+	const pageMode = paper.querySelector('[aria-label="Mise en page PDF"]');
+	assert(pageMode.value === "single", "Simple page par défaut");
+	pageMode.value = "double"; pageMode.dispatchEvent(new Event("change"));
+	const pdfPageFields = formatPanels[0].children[0];
+	assert(!pdfPageFields.querySelector('[aria-label="Marge gauche de page (mm)"]') && pdfPageFields.querySelector('[aria-label="Marge intérieure de page (mm)"]') && pdfPageFields.querySelector('[aria-label="Marge extérieure de page (mm)"]'), "Double page : marges intérieure et extérieure");
+	for (const [label, value] of [["Marge intérieure de page (mm)", "24"], ["Marge extérieure de page (mm)", "14"], ["Marge de reliure (mm)", "7"]]) {
+		const input = pdfPageFields.querySelector('[aria-label="' + label + '"]'); input.value = value; input.dispatchEvent(new Event("input"));
+	}
+	assert(paperPage["margin-inner"] === "24mm" && paperPage["margin-outer"] === "14mm" && paperPage["binding-offset"] === "7mm", "Les marges de livre sont enregistrées en mm");
+	const pdfFrame = formatPanels[0].children[1].querySelector("iframe");
+	assert(Math.abs(parseFloat(pdfFrame.contentWindow.getComputedStyle(pdfFrame.contentDocument.body).paddingLeft) - 31 * 96 / 25.4) < 0.1, "L’aperçu recto ajoute la reliure à la marge intérieure");
+	pageMode.value = "single"; pageMode.dispatchEvent(new Event("change"));
+	assert(pdfPageFields.querySelector('[aria-label="Marge gauche de page (mm)"]') && !pdfPageFields.querySelector('[aria-label="Marge intérieure de page (mm)"]') && paperPage["margin-inner"] === "24mm", "Le retour en simple page conserve les valeurs des deux modes");
 	tabs[2].click();
 	const docxBody = formatPanels[1].children[1].querySelector('[aria-label="Corps (pt)"]'); docxBody.value = "13"; docxBody.dispatchEvent(new Event("input", { bubbles: true }));
 	assert(otherEditors[1].presentation.style["font-size"] === "13pt" && otherEditors[0].presentation.style["font-size"] === undefined && presentation.style["font-size"] === undefined, "Styles PDF, DOCX et ePub indépendants");
@@ -199,6 +257,7 @@ const check = async assets => {
 	invalidSize.value = "";
 	for (const name of ["Corps (em)", "Interligne (em)", "Marge haute (em)", "Marge basse (em)", "Marge gauche (em)", "Marge droite (em)", "Alinéa (em)"]) assert(field(name).value === "" && field(name).placeholder === "Auto", name + " doit être en Auto");
 	const styleChoices = new Set(Array.from(field("Style").options, option => option.value));
+	assert(styleChoices.has(".bookbinder-colophon p"), "Le style Colophon doit être disponible dans la liste des styles");
 	const styleLabels = Array.from(field("Style").options, option => option.text);
 	assert(styleLabels.slice(0, 7).join("|") === ["Texte courant", "Titre 1", "Titre 2", "Titre 3", "Titre 4", "Titre 5", "Titre 6"].join("|"), "Texte courant puis titres dans l’ordre");
 	assert(styleLabels[7] === "Titre du livre", "Le titre du livre reste avec les titres");
@@ -209,6 +268,12 @@ const check = async assets => {
 	change("Position du titre", "one-third");
 	assert(presentation.styles["h1.title"]["font-size"] === "2.5em" && computed("h1.title").fontSize === "40px" && computed("h1:not(.title)").fontSize === "48px", "Le titre de la page de garde a son propre style");
 	assert(Math.abs(parseFloat(computed("h1.title").paddingTop) - frame.contentWindow.innerHeight / 3) < 0.1, "Le titre du livre peut aussi descendre à un tiers de page");
+	change("Style", ".bookbinder-colophon p");
+	assert(field("Corps (em)").value === "" && field("Police").value === "", "Le style Colophon commence en Auto");
+	change("Corps (em)", "0.9", "input"); field("Italique").click(); field("Aligner : Droite").click();
+	change("Marge gauche (em)", "0.5", "input"); change("Alinéa (em)", "0.75", "input");
+	assert(computed(".bookbinder-colophon > p").fontStyle === "italic" && computed(".bookbinder-colophon > p").textAlign === "right" && Math.abs(parseFloat(computed(".bookbinder-colophon > p").fontSize) - 14.4) < 0.1, "L’aperçu applique la typographie du colophon");
+	assert(computed(".bookbinder-colophon .bookbinder-credit p").textAlign === "center" && computed(".bookbinder-colophon .bookbinder-credit p").textIndent === "0px" && computed(".bookbinder-colophon .bookbinder-credit p").marginLeft === "0px", "Le crédit reste centré sans alinéa malgré les réglages du colophon");
 	change("Style", "p");
 	assert(computed("p").color === "rgb(0, 0, 0)" && computed("h3").color === "rgb(0, 0, 0)" && computed("a").color === "rgb(0, 0, 0)", "Texte, titres et liens noirs par défaut dans l’aperçu");
 	assert(computed("a").textDecorationLine.includes("underline"), "Les liens sont soulignés par défaut");
@@ -274,7 +339,9 @@ const check = async assets => {
 	try { await editor.addFont("fonts/invalide.ttf", new Uint8Array([0, 1, 0, 0])); }
 	catch (error) { rejectedFont = error.message.includes("ne peut pas être chargée"); }
 	assert(rejectedFont, "Une police corrompue doit être refusée sans modifier le projet");
-	await editor.addFont(filename, bytes); presentation.fonts.push(filename);
+	await editor.addFont(filename, bytes);
+	assert(Array.from(field("Police").options).find(option => option.value === BookUI.fontFamily(filename)).textContent.endsWith("(Serif)"), "Le type d’une police personnelle est indiqué dans les styles");
+	assert(presentation.fonts.length === 0, "Importer une police dans la bibliothèque ne l’ajoute pas aux ressources du projet");
 	assert(presentation.style["font-family"] === undefined, "Importer une police ne l’affecte pas au texte courant");
 	editor.refreshFonts();
 	editor.setBaseCss(assets.baseCss + '@font-face{font-family:ExistingProjectFont;src:url("../fonts/' + assets.fontName + '")}h1{font-family:ExistingProjectFont}');
@@ -283,9 +350,12 @@ const check = async assets => {
 	change("Police", BookUI.fontFamily(filename));
 	assert(frame.contentDocument.fonts.check('16px "' + BookUI.fontFamily(filename) + '"'), "La police importée doit être chargée");
 	assert(computed("h2").fontFamily.includes(BookUI.fontFamily(filename)), "La police doit être utilisée dans l’aperçu");
-	editor.removeFont(filename);
-	assert(!presentation.headings.h2["font-family"] && !presentation.fonts.length, "Le retrait doit retirer les références à la police");
-	await editor.addFont(filename, bytes); presentation.fonts.push(filename);
+	assert(field("Police").options[0].value === "" && field("Police").options[1].value === BookUI.fontFamily(filename) && field("Police").querySelector(":scope > hr"), "Les polices utilisées remontent immédiatement sous Auto, avant un séparateur HR");
+	ruleEditor.refresh();
+	assert(rulesPanel.querySelector('[aria-label="Police"]').options[1].value === BookUI.fontFamily(filename) && rulesPanel.querySelector('select[aria-label="Police"] > hr'), "Le groupe utilisé reflète tous les styles, y compris dans l’éditeur de règles");
+	change("Police", "");
+	assert(!presentation.headings.h2["font-family"] && !presentation.fonts.length, "Auto retire la dernière déclaration de la police et sa ressource");
+	assert(!field("Police").querySelector("hr"), "Aucun séparateur ne reste quand aucune police n’est utilisée");
 	change("Police", BookUI.fontFamily(filename));
 	change("Style", "p"); change("Corps (em)", "1.25", "input");
 	assert(Math.abs(parseFloat(computed("p").fontSize) - 20) < 0.1, "La taille relative du texte doit être appliquée une seule fois");
@@ -375,7 +445,7 @@ const check = async assets => {
 	const abandonedContainer = document.createElement("div"); document.body.append(abandonedContainer);
 	const abandoned = new BookUI.StyleEditor(abandonedContainer, { style: {}, headings: {}, fonts: [] }, assets.baseCss, () => {}, undefined, { sanitizeHTMLToDom: parseSample, createEl: makeEl });
 	abandoned.dispose(); await abandoned.ready; abandonedContainer.remove();
-	const legacyContainer = document.createElement("div"); document.body.append(legacyContainer);
+	const dimensionContainer = document.createElement("div"); document.body.append(dimensionContainer);
 	const baseContainer = document.createElement("div"); document.body.append(baseContainer);
 	const basePresentation = { style: { "margin-left": "0.5em", color: "#123456", "font-size": "1.5em", "font-family": "serif" }, headings: {}, fonts: [] };
 	const baseEditor = new BookUI.StyleEditor(baseContainer, basePresentation, assets.baseCss, () => {}, undefined, { sanitizeHTMLToDom: parseSample, createEl: makeEl });
@@ -407,24 +477,24 @@ const check = async assets => {
 	assert(!baseContainer.querySelector('[aria-label="Position du titre"]'), "La position de page est réservée aux titres");
 	separatorReopened.dispose();
 	baseContainer.remove(); fieldScope = epubPanel;
-	const legacyPresentation = { style: { "page-margin": "20pt", "font-size": "12pt", "line-height": "18pt" }, headings: { h2: { "font-size": "24pt", "margin-top": "12pt" } }, fonts: [] };
-	const legacy = new BookUI.StyleEditor(legacyContainer, legacyPresentation, assets.baseCss, () => {}, undefined, { sanitizeHTMLToDom: parseSample, createEl: makeEl });
-	await legacy.ready;
-	legacy.setBaseCss(assets.baseCss + "body{font-size:20px}");
-	legacy.normalizeUnits();
-	assert(["top", "bottom", "left", "right"].every(side => Math.abs(parseFloat(legacyPresentation.page["margin-" + side]) - 20 / 12) < 0.0001 && legacyPresentation.page["margin-" + side].endsWith("em")) && legacyPresentation.style["page-margin"] === undefined, "Les anciennes marges doivent être converties en em");
-	assert(legacyPresentation.style["font-size"] === "1em" && legacyPresentation.headings.h2["font-size"] === "2em" && legacyPresentation.headings.h2["margin-top"] === "0.5em", "Le texte courant définit la taille de base une seule fois");
-	assert(legacyPresentation.style["line-height"] === "1.5em", "L’interligne absolu doit aussi être converti en em");
-	legacyPresentation.headings.h2["margin-top"] = "12pt";
-	legacyPresentation.headings.h2["page-position"] = "one-third";
-	legacy.refresh(); legacy.normalizeUnits();
-	assert(legacyPresentation.headings.h2["margin-top"] === "12pt", "La sauvegarde conserve une ancienne marge inactive avec la position à un tiers");
-	delete legacyPresentation.headings.h2["page-position"];
-	legacy.refresh(); legacy.normalizeUnits();
-	assert(legacyPresentation.headings.h2["margin-top"] === "0.5em", "Le retour en Auto retrouve et convertit la marge précédente");
-	const legacyWindow = legacyContainer.querySelector("iframe").contentWindow;
-	assert(Math.abs(parseFloat(legacyWindow.getComputedStyle(legacyWindow.document.body).paddingLeft) - 20 * 96 / 72) < 0.1, "La marge de page dépend de la racine, indépendamment du corps du texte");
-	legacy.dispose(); legacyContainer.remove();
+	const dimensionPresentation = { style: { "font-size": "12pt", "line-height": "18pt" }, page: Object.fromEntries(["top", "bottom", "left", "right"].map(side => ["margin-" + side, "20pt"])), headings: { h2: { "font-size": "24pt", "margin-top": "12pt" } }, fonts: [] };
+	const dimensions = new BookUI.StyleEditor(dimensionContainer, dimensionPresentation, assets.baseCss, () => {}, undefined, { sanitizeHTMLToDom: parseSample, createEl: makeEl });
+	await dimensions.ready;
+	dimensions.setBaseCss(assets.baseCss + "body{font-size:20px}");
+	dimensions.normalizeUnits();
+	assert(["top", "bottom", "left", "right"].every(side => Math.abs(parseFloat(dimensionPresentation.page["margin-" + side]) - 20 / 12) < 0.0001 && dimensionPresentation.page["margin-" + side].endsWith("em")), "Les dimensions de page saisies dans le projet sont converties en em");
+	assert(dimensionPresentation.style["font-size"] === "1em" && dimensionPresentation.headings.h2["font-size"] === "2em" && dimensionPresentation.headings.h2["margin-top"] === "0.5em", "Le texte courant définit la taille de base une seule fois");
+	assert(dimensionPresentation.style["line-height"] === "1.5em", "L’interligne absolu doit aussi être converti en em");
+	dimensionPresentation.headings.h2["margin-top"] = "12pt";
+	dimensionPresentation.headings.h2["page-position"] = "one-third";
+	dimensions.refresh(); dimensions.normalizeUnits();
+	assert(dimensionPresentation.headings.h2["margin-top"] === "12pt", "La sauvegarde conserve une marge inactive avec la position à un tiers");
+	delete dimensionPresentation.headings.h2["page-position"];
+	dimensions.refresh(); dimensions.normalizeUnits();
+	assert(dimensionPresentation.headings.h2["margin-top"] === "0.5em", "Le retour en Auto retrouve et convertit la marge précédente");
+	const dimensionWindow = dimensionContainer.querySelector("iframe").contentWindow;
+	assert(Math.abs(parseFloat(dimensionWindow.getComputedStyle(dimensionWindow.document.body).paddingLeft) - 20 * 96 / 72) < 0.1, "La marge de page dépend de la racine, indépendamment du corps du texte");
+	dimensions.dispose(); dimensionContainer.remove();
 	change("Style", "h2");
 	for (const element of container.querySelectorAll("input,select")) assert(element.getAttribute("aria-label") || element.labels?.length, "Contrôle sans nom accessible");
 	container.querySelectorAll('.bookbinder-inspector-tabs [role="tab"]')[0].click();
@@ -450,6 +520,32 @@ const check = async assets => {
 	host.style.width = "800px";
 	container.querySelectorAll('.bookbinder-inspector-tabs [role="tab"]')[0].click();
 	editor.normalizeUnits();
+	const packageFont = assets.packageFonts.find(font => font.path === "FiraSans-Regular.otf");
+	const packageReference = "library:" + packageFont.path.split("/").pop();
+	assert(fontRequests.length === 0, "Les polices installées restent déchargées tant qu’aucune n’est choisie");
+	change("Style", "h5"); change("Police", BookUI.fontFamily(packageReference));
+	assert(field("Police").disabled, "Le sélecteur attend la fin du chargement de la police");
+	change("Style", "h6");
+	await fontSelection;
+	const fontChoices = Array.from(field("Police").children);
+	const fontDivider = fontChoices.findIndex(option => option.tagName === "HR");
+	assert(fontDivider === 3 && new Set(fontChoices.slice(1, fontDivider).map(option => option.value)).size === 2 && fontChoices.slice(1, fontDivider).every(option => [BookUI.fontFamily(filename), BookUI.fontFamily(packageReference)].includes(option.value)), "Toutes les polices utilisées sont au-dessus du HR, une seule fois chacune");
+	assert(presentation.headings.h5["font-family"] === BookUI.fontFamily(packageReference) && !presentation.headings.h6["font-family"], "La police est affectée au style choisi même si on change de style pendant son chargement");
+	assert(frame.contentDocument.fonts.check('16px "' + BookUI.fontFamily(packageReference) + '"'), "Une police choisie dans la bibliothèque est chargée dans l’aperçu");
+	change("Police", BookUI.fontFamily(packageReference));
+	change("Style", "h5"); change("Police", "");
+	assert(presentation.fonts.includes(packageReference), "Une police reste utilisée tant qu’un autre style la déclare");
+	change("Style", "h6");
+	change("Police", "");
+	assert(!presentation.fonts.includes(packageReference), "Repasser le dernier style en Auto retire automatiquement sa police des ressources du projet");
+	assert(Array.from(field("Police").options).some(option => option.value === BookUI.fontFamily(packageReference)), "Une police inutilisée reste disponible dans la bibliothèque");
+	change("Style", "h5"); change("Police", BookUI.fontFamily(packageReference));
+	field("Réinitialiser ce style").click();
+	assert(!presentation.fonts.includes(packageReference), "Réinitialiser le style retire aussi la police inutilisée");
+	assert(Array.from(field("Police").children).slice(1, Array.from(field("Police").children).findIndex(option => option.tagName === "HR")).every(option => option.value !== BookUI.fontFamily(packageReference)), "Réinitialiser un style reclasse immédiatement la police inutilisée sous le HR");
+	change("Police", BookUI.fontFamily(packageReference));
+	assert(fontRequests.length === 1 && fontRequests[0] === packageReference, "La police choisie est chargée une seule fois, puis réutilisée depuis le cache d’aperçu");
+	assert(presentation.style["font-family"] === undefined, "Choisir une police de titre laisse le corps en Auto");
 	BookUI.setLocale("en");
 	const englishContainer = document.createElement("div"); englishContainer.className = "bookbinder-project-presentation"; host.append(englishContainer);
 	const englishPresentation = { style: {}, headings: {}, fonts: [] };
@@ -466,6 +562,11 @@ const check = async assets => {
 	englishStyle.value = "p.tab"; englishStyle.dispatchEvent(new Event("change"));
 	englishContainer.querySelector('[aria-label="Italic"]').click();
 	assert(englishPresentation.styles["p.tab"]["font-style"] === "italic", "English controls preserve the same style keys");
+	const englishFont = englishContainer.querySelector('[aria-label="Font"]');
+	englishFont.value = "serif"; englishFont.dispatchEvent(new Event("change"));
+	assert(englishFont.options[1].value === "serif" && englishFont.querySelector("hr") && englishFont.value === "serif", "Une famille générique utilisée remonte aussi, en conservant la sélection");
+	englishPresentation.headings.h1 = { "font-family": "monospace" }; englishPresentation.headings.h2 = { "font-family": "sans-serif" }; englishEditor.refresh();
+	assert(!englishContainer.querySelector('select[aria-label="Font"] > hr'), "Aucun séparateur vide quand toutes les polices disponibles sont utilisées");
 	const englishRulesContainer = document.createElement("div"); host.append(englishRulesContainer);
 	const englishRules = new BookUI.StyleEditor(englishRulesContainer, englishPresentation, assets.baseCss, () => {}, undefined, { sanitizeHTMLToDom: parseSample, createEl: makeEl, format: "epub", rules: true });
 	await englishRules.ready;
@@ -504,6 +605,9 @@ const projectDirectory = path.join(directory, "projet"); await mkdir(projectDire
 const fontDirectory = path.join(directory, "plugin", "data", "_fonts");
 assert.equal(await saveLibraryFont(fontDirectory, font), "library:" + font.name);
 assert.deepEqual(await listFontLibrary(fontDirectory), ["library:" + font.name]);
+const packageFont = packageFonts.find(font => font.path === "FiraSans-Regular.otf");
+const packageFontName = path.basename(packageFont.path);
+await saveLibraryFont(fontDirectory, { name: packageFontName, data: Buffer.from(packageFont.data, "base64") });
 await writeFile(path.join(projectDirectory, "cover.jpg"), Buffer.from(result.cover, "base64"));
 const { disabledRules, ...epub } = result.presentation;
 const data = { title: "Projet visuel", author: "Auteur", filename: result.filename, colophon: "COL_UI *Composition personnelle*.", cover: "cover.jpg", epub: { ...epub, "disabled-rules": disabledRules }, pdf: result.pdf, docx: result.docx, custom: { preserved: true } };
@@ -516,10 +620,12 @@ assert.deepEqual(Object.keys(saved), ["title", "author", "filename", "colophon",
 assert.equal(saved.filename, "epreuve-finale");
 assert.equal(saved.colophon, data.colophon);
 assert.equal(saved.epub.styles["h1.title"]["font-size"], "2.5em");
+assert.deepEqual(saved.epub.styles[".bookbinder-colophon p"], { "font-size": "0.9em", "font-style": "italic", "text-align": "right", "margin-left": "0.5em", "text-indent": "0.75em" });
 assert.equal(saved.epub.headings.h2["font-family"], fontFamily(font.name));
 assert.equal(saved.epub.headings.h2["page-position"], "one-third");
 assert.equal(saved.custom.preserved, true);
-assert.deepEqual(saved.epub.fonts, ["library:" + font.name]);
+assert.deepEqual(saved.epub.fonts, ["library:" + font.name, "library:" + packageFontName]);
+assert.equal(saved.epub.headings.h5["font-family"], fontFamily(packageFontName));
 assert.equal(saved.epub.separator, "⁂ · ⁂");
 for (const property of ["font-size", "font-family", "color", "line-height"]) assert.equal(saved.epub.style[property], undefined, property + " reste en Auto après sauvegarde");
 assert.equal(saved.epub.style["margin-left"], "0.5em");
@@ -528,17 +634,21 @@ assert.equal(saved.pdf.page["margin-top"], "19mm");
 assert.equal(saved.docx.style["font-size"], "13pt");
 const project = parseProject(saved, "Projet");
 assert.equal(project.filename, "epreuve-finale");
+assert.deepEqual(project.styles[".bookbinder-colophon p"], saved.epub.styles[".bookbinder-colophon p"], "Le style Colophon est conservé après relecture du projet");
 for (const property of ["font-size", "font-family", "color", "line-height"]) assert.equal(project.style[property], undefined, property + " reste en Auto après lecture du projet enregistré");
 assert.deepEqual(project.disabledRules, ["quote"]);
 assert.equal(project.rules["blockquote .bookbinder-after-heading-quote + p::first-letter"]["font-size"], "2em");
 const pandoc = await detectTool("pandoc"); assert.equal(pandoc.state, "found");
 const output = path.join(projectDirectory, `${project.filename}.epub`);
 assert.equal(path.basename(output), "epreuve-finale.epub");
-assert.equal(await exportEpub({ project, sources: [{ path: path.join(projectDirectory, "source.md"), content: "## Titre mis en forme\n\nTexte du livre.\n\n***\n\nSuite du texte." }], directory: projectDirectory, output, fontDirectory, pandoc: pandoc.path, resources, renderCover: async () => { throw new Error("La couverture fournie doit être utilisée"); } }), output);
+assert.equal(await exportEpub({ project: { ...project, fonts: ["library:unused-missing.otf"] }, sources: [{ path: path.join(projectDirectory, "source.md"), content: "## Titre mis en forme\n\nTexte du livre.\n\n***\n\nSuite du texte." }], directory: projectDirectory, output, fontDirectory, pandoc: pandoc.path, resources, renderCover: async () => { throw new Error("La couverture fournie doit être utilisée"); } }), output);
 const exec = promisify(execFile);
 const entries = (await exec("/usr/bin/unzip", ["-Z1", output])).stdout.trim().split("\n");
 const embeddedFont = entries.find(name => name.endsWith(font.name)); assert.ok(embeddedFont);
 assert.deepEqual((await exec("/usr/bin/unzip", ["-p", output, embeddedFont], { encoding: "buffer" })).stdout, Buffer.from(font.data));
+const embeddedPackageFont = entries.find(name => name.endsWith("/" + packageFontName)); assert.ok(embeddedPackageFont);
+assert.deepEqual((await exec("/usr/bin/unzip", ["-p", output, embeddedPackageFont], { encoding: "buffer" })).stdout, Buffer.from(packageFont.data, "base64"));
+assert.equal(entries.filter(name => /\/fonts\/[^/]+\.(otf|ttf)$/.test(name)).length, 2, "L’EPUB embarque uniquement les polices du projet, pas toute la bibliothèque");
 let css = "";
 for (const name of entries.filter(name => name.endsWith(".css"))) css += (await exec("/usr/bin/unzip", ["-p", output, name])).stdout;
 let separatorHtml = "";

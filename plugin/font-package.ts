@@ -9,8 +9,8 @@ import { t } from "./i18n.ts";
 const hash = (data: Uint8Array): string => createHash("sha256").update(data).digest("hex");
 
 function destination(directory: string, entry: FontCatalog["files"][number]): string {
-	if (!/^(?:README\.md|(?:corps|titres|symboles)\/[A-Za-z0-9]+\/(?:[A-Za-z0-9-]+\.otf|README\.md|LICENSE\.txt))$/.test(entry.path)) throw new Error(t("fontPackageInvalid"));
-	return entry.kind === "font" ? path.join(directory, path.basename(entry.path)) : path.join(directory, "_package-notes", entry.path);
+	if (!/^(?:README\.md|[A-Za-z0-9-]+\.otf|[A-Za-z0-9]+\.(?:md|LICENSE\.txt))$/.test(entry.path)) throw new Error(t("fontPackageInvalid"));
+	return path.join(directory, entry.kind === "font" ? entry.path : "_package-" + entry.path);
 }
 
 export function decodeFontPackage(data: Uint8Array): Map<string, Buffer> {

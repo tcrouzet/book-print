@@ -1,4 +1,17 @@
 interface BookbinderMessages {
+	pageMode: string;
+	singlePage: string;
+	doublePage: string;
+	innerPageMargin: string;
+	outerPageMargin: string;
+	bindingMargin: string;
+	invalidPageMode: string;
+	customPaperSize: string;
+	fontSymbol: string;
+	personalFont: string;
+	invalidFontType: string;
+	chooseFontTypes: string;
+	chooseFontType: string;
 	aBookbinderExportIsAlreadyRunning: string;
 	aDistantVoice: string;
 	aNewStory: string;
@@ -45,7 +58,7 @@ interface BookbinderMessages {
 	checkInstallation: string;
 	checking: string;
 	checkingTheOnlineVersion: string;
-	chooseABookbinderMdBookPrintMdOrBookPrintYmlFile: string;
+	chooseABookbinderMdFile: string;
 	chooseAColour: string;
 	chooseAFolderWithAnAbsolutePath: string;
 	chooseAnOtfTtfWoffOrWoff2Font: string;
@@ -77,7 +90,6 @@ interface BookbinderMessages {
 	customCharacters: string;
 	customPaths: string;
 	customPathsAreSavedWhenChecking: string;
-	defaultFontsAuto: string;
 	defaultTheSameFolderAsTheMarkdownSourceFile: string;
 	description: string;
 	detectedVersion: string;
@@ -172,10 +184,8 @@ interface BookbinderMessages {
 	line: string;
 	lineHeight: string;
 	lineHeightEm: string;
-	lineHeightUnit: string;
 	link: string;
 	listItem: string;
-	loadingFonts: string;
 	miktexConsoleGuide: string;
 	miktexUpdateAvailable: string;
 	missingPluginResourceFilename: string;
@@ -214,6 +224,7 @@ interface BookbinderMessages {
 	previewBookTitle: string;
 	previewBullets: string;
 	previewCodeblock: string;
+	previewColophon: string;
 	previewEmphasis: string;
 	previewFootnote: string;
 	previewFootnoterule: string;
@@ -238,7 +249,6 @@ interface BookbinderMessages {
 	printIsbn: string;
 	programNotDetectedInstallItThenCheckAgain: string;
 	programPathNotFound: string;
-	project: string;
 	projectAccessDenied: string;
 	projectChangedElsewhere: string;
 	projectCloned: string;
@@ -258,9 +268,6 @@ interface BookbinderMessages {
 	quotation: string;
 	readEpub: string;
 	readingRequiresObsidianOnDesktop: string;
-	remove: string;
-	removeFontFromTheProject: string;
-	removeFromProjectWithoutDeletingTheFile: string;
 	replace: string;
 	replaceThisFileOrSaveANewNumberedVersion: string;
 	reset: string;
@@ -294,7 +301,6 @@ interface BookbinderMessages {
 	subscript: string;
 	subtitle: string;
 	superscript: string;
-	symbols: string;
 	table: string;
 	tableCell: string;
 	tableHeading: string;
@@ -334,10 +340,7 @@ interface BookbinderMessages {
 	unreadableFontFilename: string;
 	upToDateAnnualVersionVersion: string;
 	upToDateVersion: string;
-	use: string;
-	useFontInTheProject: string;
 	useTheSourceFileFolder: string;
-	useThisFontInTheProject: string;
 	versionVersionIsAvailable: string;
 	viewInstallers: string;
 	visible: string;
@@ -345,6 +348,21 @@ interface BookbinderMessages {
 	weightAndItalic: string;
 	xelatexPath: string;
 	yes: string;
+	paperFormat: string;
+	paperWidth: string;
+	paperHeight: string;
+	margins: string;
+	invalidPaperSize: string;
+	invalidPaperDimension: string;
+	invalidPageMargin: string;
+	paperMarginsTooLarge: string;
+	preparingPdf: string;
+	generatingPdf: string;
+	pdfCreatedFilename: string;
+	bookToPdfError: string;
+	theOutputPathMustNameAPdfFile: string;
+	pdfFontMustBeOtfOrTtf: string;
+	invalidPdfStyle: string;
 }
 
 declare module "*locales/en.json" {

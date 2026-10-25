@@ -6,9 +6,26 @@ import { compareVersions, detectTool, searchDirectories } from "../plugin/tools.
 import { parseSettings } from "../plugin/types.ts";
 import { checkUpdate, pandocInstaller, updatePage } from "../plugin/updates.ts";
 import { resolveOutputDirectory, saveGeneratedFile } from "../plugin/output.ts";
-import { setLocale } from "../plugin/i18n.ts";
+import { setLocale, t } from "../plugin/i18n.ts";
+import ts from "typescript";
 
 setLocale("fr");
+
+const dialogs = ts.createSourceFile("dialogs.ts", await readFile(new URL("../plugin/dialogs.ts", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true);
+const declaration = dialogs.statements.find((node): node is ts.FunctionDeclaration => ts.isFunctionDeclaration(node) && node.name?.text === "confirmOverwrite");
+assert.ok(declaration);
+const confirmSource = ts.transpileModule(declaration.getText(dialogs).replace(/^export\s+/, ""), { compilerOptions: { target: ts.ScriptTarget.ES2021 } }).outputText;
+for (const [response, expected] of [[0, "replace"], [1, "version"], [2, "cancel"], [-1, "cancel"]] as const) {
+	const confirm = new Function("t", "remote", "path", confirmSource + "\nreturn confirmOverwrite;")(t, {
+		dialog: { showMessageBox: async (options: { buttons: string[]; defaultId: number; cancelId: number }) => {
+			assert.deepEqual(options.buttons, [t("replace"), t("createAVersion"), t("cancel")], "Remplacer est proposé en premier");
+			assert.equal(options.defaultId, 0, "Remplacer est sélectionné par défaut");
+			assert.equal(options.cancelId, 2);
+			return { response };
+		} },
+	}, path) as (filename: string) => Promise<string>;
+	assert.equal(await confirm("Livre.epub"), expected, "Chaque bouton conserve son action");
+}
 
 const directory = await mkdtemp(path.join(tmpdir(), "bookbinder-tools-"));
 const bin = path.join(directory, "dossier avec espaces");

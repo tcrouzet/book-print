@@ -7,9 +7,9 @@ export async function confirmOverwrite(filename: string): Promise<ExistingOutput
 	const result = await remote.dialog.showMessageBox({
 		type: "question", title: t("theFileAlreadyExists"), message: t("filenameAlreadyExists", { filename: path.basename(filename) }),
 		detail: t("replaceThisFileOrSaveANewNumberedVersion"),
-		buttons: [t("createAVersion"), t("replace"), t("cancel")], defaultId: 0, cancelId: 2,
+		buttons: [t("replace"), t("createAVersion"), t("cancel")], defaultId: 0, cancelId: 2,
 	});
-	return result.response === 1 ? "replace" : result.response === 0 ? "version" : "cancel";
+	return result.response === 0 ? "replace" : result.response === 1 ? "version" : "cancel";
 }
 
 export async function chooseOutputDirectory(defaultPath?: string, title = t("chooseTheOutputFolder")): Promise<string | undefined> {
