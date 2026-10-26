@@ -1,9 +1,9 @@
 import catalog from "../fonts/catalog.json" with { type: "json" };
 import { getLocale, t } from "./i18n.ts";
-import { fontFilename } from "./presentation.ts";
+import { fontFace, fontFilename, type FontFaceInfo } from "./presentation.ts";
 
 export type FontType = "serif" | "sans-serif" | "symbol";
-export interface LibraryFontInfo { reference: string; type?: FontType }
+export interface LibraryFontInfo { reference: string; type?: FontType; face?: FontFaceInfo }
 export const fontTypes: FontType[] = ["serif", "sans-serif", "symbol"];
 
 export function fontTypeLabel(type: FontType): string {
@@ -14,8 +14,9 @@ export function bundledFontType(reference: string): FontType | undefined {
 	return catalog.families.find(family => family.files.includes(fontFilename(reference)))?.category;
 }
 
-export function fontLabel(reference: string, type = bundledFontType(reference)): string {
-	return fontFilename(reference) + (type ? " (" + fontTypeLabel(type) + ")" : "");
+export function fontLabel(reference: string, type = bundledFontType(reference), face?: FontFaceInfo): string {
+	const name = face?.family ?? catalog.families.find(family => family.files.includes(fontFilename(reference)))?.name ?? fontFace(reference).family;
+	return name + (type ? " (" + fontTypeLabel(type) + ")" : "");
 }
 
 export interface FontCatalog {

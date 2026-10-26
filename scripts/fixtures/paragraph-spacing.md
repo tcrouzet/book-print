@@ -1,0 +1,39 @@
+## SPACINGHEADING
+
+BODYONE
+
+BODYTWO
+
+BODYTHREE
+
+> QUOTEONE
+>
+> QUOTETWO
+
+> QUOTETHREE
+
+> QUOTEFOUR
+
+BODYRESET
+
+```{.tab}
+TABONE
+```
+
+```{.tab}
+TABTWO
+```
+
+```{.tab}
+TABTHREE
+```
+
+BODYAFTERTAB
+
+NOTEREFERENCE[^spacing]
+
+[^spacing]: FOOTONE
+
+    FOOTTWO
+
+    FOOTTHREE

@@ -19,6 +19,8 @@ fusion:
   noteSeparator: ''
 
 pdf:
+  toc: true
+  toc-depth: 2
   page:
     paper-size: a5
     page-mode: single
@@ -29,11 +31,15 @@ pdf:
   rules: {}
 
 docx:
+  toc: true
+  toc-depth: 2
   page: {}
   style: {}
   headings: {}
 
 epub:
+  toc: false
+  toc-depth: 2
   page: {}
   style: {}
   headings: {}

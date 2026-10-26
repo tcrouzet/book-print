@@ -6,8 +6,9 @@ import * as path from "node:path";
 import { prepareMarkdown, projectCss, localResource, isProjectNote, noteSeparators, type BookProject } from "./project";
 import type { CoverOptions } from "./cover";
 import { saveGeneratedFile, type ExistingOutputChoice } from "./output";
-import { listFontLibrary, resolveFont } from "./font-library.ts";
-import { fontsInStyles } from "./presentation.ts";
+import { readFontLibrary, resolveFont } from "./font-library.ts";
+import { resolveFontFamilies } from "./presentation.ts";
+import { activeRuleDefinitions } from "./book-styles.ts";
 
 export interface BookSource { path: string; content: string }
 
@@ -67,7 +68,11 @@ export function prepareBookSources(request: Pick<EpubRequest, "sources" | "proje
 
 export async function exportEpub(request: EpubRequest): Promise<string | undefined> {
 	const { directory, output, resources } = request;
-	const project = { ...request.project, fonts: fontsInStyles(request.project, request.fontDirectory ? await listFontLibrary(request.fontDirectory) : []) };
+	const library = request.fontDirectory ? await readFontLibrary(request.fontDirectory) : [];
+	const faces = new Map(library.map(font => [font.reference, font.face]));
+	const lookup = (reference: string) => faces.get(reference);
+	const project = structuredClone(request.project);
+	resolveFontFamilies(project, library.map(font => font.reference), lookup);
 	const { sources, pageBreak } = prepareBookSources({ ...request, project });
 	if (!path.isAbsolute(output) || path.extname(output).toLowerCase() !== ".epub") throw new Error(t("theOutputPathMustNameAnEpubFile"));
 	const fonts = project.fonts.map(filename => resolveFont(directory, filename, request.fontDirectory));
@@ -82,6 +87,7 @@ export async function exportEpub(request: EpubRequest): Promise<string | undefin
 	const temporary = await mkdtemp(path.join(path.dirname(output), ".bookbinder-"));
 	try {
 		const args = ["--to=epub3", "--standalone", "--fail-if-warnings", `--toc-depth=${project.tocDepth}`, `--split-level=${project.splitLevel}`, "--wrap=none"];
+		if (project.toc) args.push("--toc");
 		for (const name of ["book-reader.lua", "epub-tab.lua", "epub-thin-space.lua"]) {
 			const key = `lua/${name}`;
 			if (!resources[key]) throw new Error(t("missingPluginResourceFilename", { filename: key }));
@@ -98,7 +104,7 @@ export async function exportEpub(request: EpubRequest): Promise<string | undefin
 			args.push(`--css=${path.join(temporary, "base.css")}`);
 		}
 		const separatorCss = pageBreak ? `\nbody .bookbinder-note-start{page-break-before:${pageBreak};break-before:${pageBreak === "always" ? "page" : pageBreak}}` : "";
-		await writeFile(path.join(temporary, "presentation.css"), projectCss(project) + separatorCss);
+		await writeFile(path.join(temporary, "presentation.css"), projectCss(project, lookup) + separatorCss);
 		args.push(`--css=${path.join(temporary, "presentation.css")}`, ...fonts.map(filename => `--epub-embed-font=${filename}`));
 		const now = new Date();
 		let count = 0;
@@ -123,7 +129,7 @@ export async function exportEpub(request: EpubRequest): Promise<string | undefin
 		}
 		const result = path.join(temporary, "book.epub");
 		args.push(`--metadata-file=${path.join(temporary, "metadata.json")}`, `--epub-cover-image=${coverFile}`, `--output=${result}`);
-		await runPandoc(request.pandoc, args, directory, JSON.stringify({ sources, pageBreak, disabledRules: project.disabledRules, separator: project.separator,
+		await runPandoc(request.pandoc, args, directory, JSON.stringify({ sources, pageBreak, ruleDefinitions: activeRuleDefinitions(project), disabledRules: project.disabledRules, separator: project.separator,
 			colophon: metadata.colophon ?? "", colophonTitle: t("colophon", {}, bookLocale), colophonCredit: t("generatedByBookbinderOn", { date: now.toLocaleDateString(bookLocale) }, bookLocale) }));
 		return await saveGeneratedFile(result, output, request.confirmOverwrite);
 	} finally {

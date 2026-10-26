@@ -1,3 +1,18 @@
+.bookbinder-export-progress { display: flex; align-items: center; gap: .5em; }
+.bookbinder-export-progress::before {
+	content: "";
+	flex: 0 0 auto;
+	box-sizing: border-box;
+	width: 1em;
+	height: 1em;
+	border: 2px solid currentColor;
+	border-right-color: transparent;
+	border-radius: 50%;
+	animation: bookbinder-export-spin 1s linear infinite;
+}
+@keyframes bookbinder-export-spin { to { transform: rotate(1turn); } }
+@media (prefers-reduced-motion: reduce) { .bookbinder-export-progress::before { animation: none; } }
+
 .bookbinder-settings .bookbinder-tool-path {
 	color: var(--text-muted);
 	font-size: var(--font-smaller);
@@ -59,7 +74,7 @@
 .bookbinder-page-fields[hidden] { display: none; }
 .bookbinder-paper-format { display: grid; gap: var(--size-4-2); margin-block: var(--size-4-2); }
 .bookbinder-page-field { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--size-4-2); }
-.bookbinder-page-field input { width: 7em; height: var(--input-height, 28px); }
+.bookbinder-page-field input:not([type="checkbox"]) { width: 7em; height: var(--input-height, 28px); }
 
 .bookbinder-project-information .setting-item {
 	display: grid;
@@ -108,7 +123,10 @@
 .bookbinder-inspector-tabs button { flex: 1; min-width: 0; padding-inline: var(--size-4-2); border: 0; border-bottom: 2px solid transparent; border-radius: 0; box-shadow: none; background: transparent; color: var(--text-muted); }
 .bookbinder-inspector-tabs button[aria-selected="true"] { border-bottom-color: var(--interactive-accent); color: var(--text-normal); font-weight: var(--font-semibold); }
 .bookbinder-inspector-panel { display: grid; gap: var(--size-4-2); padding: var(--size-4-2); align-content: start; }
-.bookbinder-character-main { display: grid; grid-template-columns: minmax(0, 1fr) repeat(2, minmax(0, 7rem)); gap: var(--size-4-2); }
+.bookbinder-character-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 12rem) minmax(0, 7rem); gap: var(--size-4-2); }
+.bookbinder-size-control { display: flex; gap: var(--size-4-1); min-width: 0; }
+.bookbinder-size-control select { flex: 1; min-width: 0; }
+.bookbinder-toolbar .bookbinder-size-control input { width: 4.5em; flex: 0 0 4.5em; min-width: 0; }
 .bookbinder-character-options { display: flex; align-items: end; gap: var(--size-4-2); flex-wrap: wrap; }
 .bookbinder-character-options > label { flex: 1; min-width: 7rem; }
 .bookbinder-style-emphasis, .bookbinder-style-alignment { display: flex; gap: var(--size-4-1); }
@@ -132,9 +150,9 @@
 	font-size: var(--font-small);
 }
 
-.bookbinder-toolbar input, .bookbinder-toolbar select { box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; }
-.bookbinder-toolbar input[type="number"] { appearance: textfield; }
-.bookbinder-toolbar input[type="number"]::-webkit-inner-spin-button, .bookbinder-toolbar input[type="number"]::-webkit-outer-spin-button { appearance: none; margin: 0; }
+.bookbinder-toolbar-toggle { grid-column: 1 / -1; flex-direction: row; align-items: center; justify-content: space-between; gap: var(--size-4-2); }
+.bookbinder-toolbar input:not([type="checkbox"]), .bookbinder-toolbar select { box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; }
+.bookbinder-folio-settings { grid-column: 1 / -1; }
 .bookbinder-toolbar-field[data-unit] input { padding-right: 2.5em; font-variant-numeric: tabular-nums; }
 .bookbinder-toolbar-field[data-unit]::after { content: attr(data-unit); position: absolute; right: var(--size-4-2); bottom: calc((var(--input-height, 28px) - 1lh) / 2); color: var(--text-muted); font-size: var(--font-smallest); pointer-events: none; }
 .bookbinder-toolbar button[aria-pressed="true"] { background: var(--interactive-accent); color: var(--text-on-accent); }
@@ -142,7 +160,7 @@
 .bookbinder-toolbar button { min-width: var(--input-height, 28px); }
 .bookbinder-toolbar button.clickable-icon { position: relative; flex: none; width: var(--input-height, 28px); height: var(--input-height, 28px); overflow: hidden; }
 .bookbinder-toolbar button[data-auto="true"]::after { content: ""; position: absolute; right: 4px; bottom: 4px; width: 4px; height: 4px; border-radius: 50%; background: var(--text-muted); }
-.bookbinder-toolbar input[type="checkbox"] { margin-block: var(--size-4-3); }
+.bookbinder-toolbar input[type="checkbox"] { flex: none; margin: 0; }
 
 .bookbinder-character-options > .bookbinder-color-palette { flex: none; min-width: var(--input-height, 28px); }
 .bookbinder-toolbar input.bookbinder-color-swatch { width: var(--input-height, 28px); height: var(--input-height, 28px); padding: var(--size-4-1); border-radius: 50%; cursor: pointer; }
@@ -175,6 +193,8 @@
 
 .nav-files-container .nav-file-title[data-path$=".epub" i],
 .nav-files-container .nav-file-title[data-path$=".epub" i] .nav-file-title-content,
+.nav-files-container .nav-file-title[data-path$=".docx" i],
+.nav-files-container .nav-file-title[data-path$=".docx" i] .nav-file-title-content,
 .nav-files-container .nav-file-title[data-path="bookbinder.md" i],
 .nav-files-container .nav-file-title[data-path$="/bookbinder.md" i],
 .nav-files-container .nav-file-title[data-path="bookbinder.md" i] .nav-file-title-content,

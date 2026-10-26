@@ -2,8 +2,10 @@ import { t } from "./i18n.ts";
 import { constants } from "node:fs";
 import { copyFile, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import * as path from "node:path";
+import { detectFontFace } from "./font-metadata.ts";
+import type { FontFaceInfo } from "./presentation.ts";
 
-export interface ImportedFont { name: string; data: Uint8Array }
+export interface ImportedFont { name: string; data: Uint8Array; face?: FontFaceInfo }
 export interface ProjectFile {
 	name: "bookbinder.md";
 	content: string;
@@ -31,10 +33,15 @@ export async function readProjectFile(directory: string): Promise<ProjectFile | 
 export async function loadFont(filename: string): Promise<ImportedFont> {
 	const name = path.basename(filename);
 	if (!/\.(otf|ttf|woff2?)$/i.test(name)) throw new Error(t("chooseAnOtfTtfWoffOrWoff2Font"));
-	const data = await readFile(filename);
+	let data: Buffer;
+	try { data = await readFile(filename); }
+	catch (error) {
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new Error(t("fontNotInstalled", { font: name }));
+		throw error;
+	}
 	const signature = data.subarray(0, 4).toString("hex");
 	if (!["4f54544f", "00010000", "74727565", "774f4646", "774f4632"].includes(signature)) throw new Error(t("unreadableFontFilename", { filename: name }));
-	return { name, data };
+	return { name, data, face: detectFontFace(data) };
 }
 
 export async function saveProjectFile(directory: string, yaml: string, expected: ProjectFile | undefined, body?: string): Promise<void> {

@@ -26,6 +26,7 @@ const source = path.join(directory, "font.otf");
 await writeFile(source, "invalid font");
 await assert.rejects(loadFont(source), /illisible/);
 await assert.rejects(loadFont(path.join(directory, "font.js")), /OTF/);
+await assert.rejects(loadFont(path.join(directory, "missing.otf")), /missing\.otf.*Bookbinder/);
 const font = { name: "test.ttf", data: new Uint8Array([0, 1, 0, 0, 1]) };
 assert.deepEqual(await listFontLibrary(fontDirectory), []);
 const reference = await saveLibraryFont(fontDirectory, font);
@@ -51,7 +52,7 @@ assert.deepEqual(await Promise.all([saveLibraryFont(fontDirectory, font), saveLi
 await writeFile(path.join(fontDirectory, "notes.txt"), "Not a font");
 assert.deepEqual(await listFontLibrary(fontDirectory), [reference]);
 assert.equal((await readdir(fontDirectory)).some(name => name.startsWith(".bookbinder-font-")), false);
-const data = { title: "Un projet", epub: { fonts: [reference] }, custom: { preserved: true } };
+const data = { title: "Un projet", epub: { fonts: [reference], toc: true, "toc-depth": 6 }, pdf: { toc: false, "toc-depth": 1, "title-page": { copyright: true, "character-count": false }, headings: { h2: { "page-break-before": "left" } } }, docx: { toc: true, "toc-depth": 3, "title-page": { copyright: false, "character-count": true }, headings: { h2: { "page-break-before": "right" } } }, custom: { preserved: true } };
 const initial = JSON.stringify(data);
 await saveProjectFile(directory, initial, undefined);
 let saved = (await readProjectFile(directory))!;
@@ -59,6 +60,12 @@ assert.equal(saved.name, "bookbinder.md");
 assert.equal(saved.yaml.trimEnd(), initial);
 assert.match(saved.content, /^---\n/);
 assert.match(saved.body, /\[Modifier le projet\]\(obsidian:\/\/bookbinder\)/);
+for (const format of ["pdf", "docx", "epub"] as const) {
+	const restored = parseProject(JSON.parse(saved.yaml), "Livre", format);
+	assert.equal(restored.toc, data[format].toc); assert.equal(restored.tocDepth, data[format]["toc-depth"], "Saving and reopening retains each format’s table of contents settings");
+	if (format !== "epub") assert.deepEqual(restored.titlePage, { copyright: data[format]["title-page"].copyright, characterCount: data[format]["title-page"]["character-count"] }, "Title page options survive saving independently per format");
+	if (format !== "epub") assert.equal(restored.headings.h2["page-break-before"], data[format].headings.h2["page-break-before"], "Heading page parity survives saving and reopening");
+}
 assert.deepEqual(await readFile(resolveFont(directory, reference, fontDirectory)), Buffer.from(font.data));
 await assert.rejects(readdir(path.join(directory, "fonts")), /ENOENT/);
 await assert.rejects(saveProjectFile(directory, "wrong", undefined), /modifié/);

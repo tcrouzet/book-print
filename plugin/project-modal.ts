@@ -8,11 +8,11 @@ import { StyleEditor } from "./style-editor";
 import { mountProjectTabs } from "./project-tabs";
 import { chooseFiles } from "./dialogs";
 import { readFontLibrary, resolveFont } from "./font-library.ts";
-import { fontsInStyles } from "./presentation.ts";
+import { fontResources, resolveFontFamilies, type FontFaceInfo } from "./presentation.ts";
 import { bindFilenameInput } from "./filename.ts";
 import type { FontType } from "./font-catalog.ts";
 import { pdfBaseCss } from "./pdf-presentation.ts";
-import { mountPaperFormat } from "./page-layout.ts";
+import { mountPaperFormat, mountTableOfContents, mountTitlePage } from "./page-layout.ts";
 
 function record(value: unknown): Record<string, unknown> {
 	return value && typeof value === "object" && !Array.isArray(value) ? { ...value as Record<string, unknown> } : {};
@@ -28,13 +28,15 @@ export async function openProjectEditor(app: App, directory: string, baseCss: st
 class ProjectModal extends Modal {
 	private editor?: StyleEditor;
 	private ruleEditors = new Map<string, StyleEditor>();
-	private editors = new Map<string, StyleEditor>();
+	private editors = new Map<"pdf" | "docx" | "epub", StyleEditor>();
 	private get styleEditors(): StyleEditor[] { return [...this.editors.values(), ...this.ruleEditors.values()]; }
 	private projects: Record<"pdf" | "docx" | "epub", BookProject>;
 	private nestedTabs: { panels: HTMLElement[]; select: (index: number) => void }[] = [];
 	private error!: HTMLElement;
 	private libraryFonts: string[] = [];
 	private fontTypes = new Map<string, FontType | undefined>();
+	private fontFaces = new Map<string, FontFaceInfo | undefined>();
+	private loadedFonts = new Set<string>();
 	private dirty = false;
 	private discard = false;
 	private saving = false;
@@ -80,10 +82,6 @@ class ProjectModal extends Modal {
 			this.refreshFilename = bindFilenameInput(input.inputEl, this.data, this.project.metadata, () => this.markDirty());
 		});
 		this.metadata(information, "lang", t("language"), false, true);
-		const paper = information.createDiv({ cls: "bookbinder-paper-format" });
-		mountPaperFormat(paper, this.projects.pdf.page, () => {
-			this.markDirty(); this.editors.get("pdf")?.refresh(); this.ruleEditors.get("pdf")?.refresh();
-		});
 		const publication = information.createEl("details");
 		publication.createEl("summary", { text: t("publication") });
 		for (const [key, label] of [
@@ -140,25 +138,30 @@ class ProjectModal extends Modal {
 			panel.prepend(tabs);
 			const page = panel.createDiv({ cls: "bookbinder-project-page" });
 			const presentation = panel.createDiv({ cls: "bookbinder-project-presentation" });
+			if (format !== "epub") {
+				const paper = page.createDiv({ cls: "bookbinder-paper-format" });
+				mountPaperFormat(paper, this.projects[format].page, () => {
+					this.markDirty(); this.editors.get(format)?.refresh(); this.ruleEditors.get(format)?.refresh();
+				});
+			}
 			page.createEl("h3", { text: t("margins") });
 			page.createEl("p", { text: format === "epub"
 				? t("epubPageDescription")
-				: t("autoKeepsTheTemplateMarginsValuesEnteredHereUseMillimetres"), cls: "bookbinder-muted" });
+				: t("pdfPageMarginsDescription"), cls: "bookbinder-muted" });
 			const pageFields = page.createDiv({ cls: "bookbinder-page-fields" });
+			mountTableOfContents(page, this.projects[format], format, () => this.markDirty());
+			if (format !== "epub") mountTitlePage(page, this.projects[format].titlePage, () => this.markDirty());
 			presentation.createEl("h3", { text: t("styles") });
-			const editor = new StyleEditor(presentation, this.projects[format], format === "pdf" ? pdfBaseCss : this.baseCss, () => this.markDirty(), () => this.close(), { format, setIcon, sanitizeHTMLToDom, fontLibrary: () => this.libraryFonts, fontType: reference => this.fontTypes.get(reference), selectFont });
+			const editor = new StyleEditor(presentation, this.projects[format], format !== "epub" ? pdfBaseCss : this.baseCss, () => this.markDirty(), () => this.close(), { format, setIcon, sanitizeHTMLToDom, fontLibrary: () => this.libraryFonts, fontType: reference => this.fontTypes.get(reference), fontFace: reference => this.fontFaces.get(reference), selectFont });
 			this.editors.set(format, editor);
 			void editor.mountPage(pageFields);
 			const panels = [page, presentation];
 			const labels = [t("page"), t("styles")];
-			if (format !== "docx") {
-				const rules = panel.createDiv({ cls: "bookbinder-project-presentation" });
-				rules.createEl("h3", { text: t("afterAHeading") });
-				rules.createEl("p", { text: t("headingRuleDescription"), cls: "bookbinder-muted" });
-				const ruleEditor = new StyleEditor(rules, this.projects[format], format === "pdf" ? pdfBaseCss : this.baseCss, () => this.markDirty(), () => this.close(), { format, setIcon, sanitizeHTMLToDom, rules: true, fontLibrary: () => this.libraryFonts, fontType: reference => this.fontTypes.get(reference), selectFont });
-				this.ruleEditors.set(format, ruleEditor);
-				panels.push(rules); labels.push(t("rules"));
-			}
+			const rules = panel.createDiv({ cls: "bookbinder-project-presentation" });
+			rules.createEl("p", { text: t("headingRuleDescription"), cls: "bookbinder-muted" });
+			const ruleEditor = new StyleEditor(rules, this.projects[format], format !== "epub" ? pdfBaseCss : this.baseCss, () => this.markDirty(), () => this.close(), { format, setIcon, sanitizeHTMLToDom, rules: true, fontLibrary: () => this.libraryFonts, fontType: reference => this.fontTypes.get(reference), fontFace: reference => this.fontFaces.get(reference), selectFont });
+			this.ruleEditors.set(format, ruleEditor);
+			panels.push(rules); labels.push(t("rules"));
 			const select = mountProjectTabs(tabs, panels, labels, () => { editor.refresh(); this.ruleEditors.get(format)?.refresh(); });
 			this.nestedTabs.push({ panels, select });
 		}
@@ -176,7 +179,7 @@ class ProjectModal extends Modal {
 					this.editor!.setBaseCss(css); this.ruleEditors.get("epub")?.setBaseCss(css);
 				}
 				await this.loadFontLibrary();
-				for (const format of Object.values(this.projects)) format.fonts = fontsInStyles(format, this.libraryFonts);
+				for (const format of Object.values(this.projects)) resolveFontFamilies(format, this.libraryFonts, reference => this.fontFaces.get(reference));
 				for (const filename of new Set(Object.values(this.projects).flatMap(format => format.fonts))) {
 					const font = await loadFont(resolveFont(this.directory, filename, this.fontDirectory));
 					await this.loadProjectFont(filename, font);
@@ -195,11 +198,16 @@ class ProjectModal extends Modal {
 		const fonts = await readFontLibrary(this.fontDirectory);
 		this.libraryFonts = fonts.map(font => font.reference);
 		this.fontTypes = new Map(fonts.map(font => [font.reference, font.type]));
+		this.fontFaces = new Map(fonts.map(font => [font.reference, font.face]));
 	}
 
 	private async loadProjectFont(reference: string, font?: ImportedFont): Promise<void> {
-		font ??= await loadFont(resolveFont(this.directory, reference, this.fontDirectory));
-		for (const editor of this.styleEditors) await editor.addFont(reference, font.data);
+		for (const source of fontResources(reference, this.libraryFonts, name => this.fontFaces.get(name))) {
+			if (this.loadedFonts.has(source)) continue;
+			const loaded = source === reference && font ? font : await loadFont(resolveFont(this.directory, source, this.fontDirectory));
+			for (const editor of this.styleEditors) await editor.addFont(source, loaded.data, loaded.face);
+			this.loadedFonts.add(source);
+		}
 	}
 
 	private metadata(container: HTMLElement, key: string, label: string, multiline = false, required = false): void {
@@ -291,17 +299,16 @@ class ProjectModal extends Modal {
 		for (const [format, editor] of this.editors) {
 			editor.normalizeUnits();
 			const presentation = editor.presentation;
-			const settings: Record<string, unknown> = { ...record(this.data[format]), fonts: presentation.fonts, style: presentation.style, page: presentation.page,
+			const settings: Record<string, unknown> = { ...record(this.data[format]), toc: this.projects[format].toc, "toc-depth": this.projects[format].tocDepth, fonts: presentation.fonts, style: presentation.style, page: presentation.page,
 				headings: Object.fromEntries(Object.entries(presentation.headings).filter(([, values]) => Object.keys(values).length)),
 				styles: Object.fromEntries(Object.entries(presentation.styles ?? {}).filter(([, values]) => Object.keys(values).length)),
 				"disabled-rules": presentation.disabledRules ?? [],
 				rules: Object.fromEntries(Object.entries(presentation.rules ?? {}).filter(([, values]) => Object.keys(values).length)) };
-			if (format !== "docx") {
-				delete settings.separator;
-				if (presentation.separator !== undefined) settings.separator = presentation.separator;
-			}
+			delete settings.separator;
+			if (format !== "epub") settings["title-page"] = { copyright: this.projects[format].titlePage.copyright, "character-count": this.projects[format].titlePage.characterCount };
+			if (presentation.separator !== undefined) settings.separator = presentation.separator;
 			data[format] = format === "epub" ? { ...settings, css: this.project.css } : settings;
-			parseProject(data, path.basename(this.directory), format as "epub" | "pdf" | "docx");
+			parseProject(data, path.basename(this.directory), format);
 		}
 		parseProject(data, path.basename(this.directory));
 		this.saving = true;

@@ -6,6 +6,7 @@ import { libraryFontPrefix } from "./presentation.ts";
 import { localResource } from "./project.ts";
 import type { ImportedFont } from "./project-files.ts";
 import { bundledFontType, fontTypes, type FontType, type LibraryFontInfo } from "./font-catalog.ts";
+import { detectFontFace } from "./font-metadata.ts";
 
 const extension = /\.(otf|ttf|woff2?)$/i;
 
@@ -41,7 +42,8 @@ export async function readFontLibrary(directory: string): Promise<LibraryFontInf
 			if (typeof value !== "string" || !fontTypes.includes(value as FontType)) throw new Error(t("invalidFontType", { font: name }));
 			type = value as FontType;
 		} catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
-		return { reference, type };
+		const face = detectFontFace(await readFile(path.join(directory, name)));
+		return { reference, type, ...(face ? { face } : {}) };
 	}));
 }
 

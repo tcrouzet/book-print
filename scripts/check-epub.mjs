@@ -15,14 +15,41 @@ mock.timers.enable({ apis: ["Date"], now: Date.UTC(2025, 0, 2, 12) });
 const root = path.resolve(import.meta.dirname, "..");
 const directory = await mkdtemp(path.join(tmpdir(), "bookbinder-epub-"));
 await build({
-	stdin: { contents: 'export * from "./plugin/i18n.ts"; export * from "./plugin/project.ts"; export * from "./plugin/epub.ts"; export * from "./plugin/tools.ts"; export { resources } from "./scripts/resources.ts";', resolveDir: root },
+	stdin: { contents: 'export * from "./plugin/i18n.ts"; export * from "./plugin/project.ts"; export * from "./plugin/epub.ts"; export * from "./plugin/tools.ts"; export { ruleDefinitions } from "./plugin/book-styles.ts"; export { resources } from "./scripts/resources.ts";', resolveDir: root },
 	bundle: true, platform: "node", format: "cjs", outfile: path.join(directory, "core.cjs"),
 	loader: { ".lua": "text", ".latex": "text", ".css": "text" },
 });
-const { setLocale, parseProject, prepareMarkdown, exportEpub, detectTool, resources } = createRequire(import.meta.url)(path.join(directory, "core.cjs"));
+const { setLocale, parseProject, prepareMarkdown, exportEpub, detectTool, resources, ruleDefinitions } = createRequire(import.meta.url)(path.join(directory, "core.cjs"));
 setLocale("fr");
 const pandoc = await detectTool("pandoc");
 assert.equal(pandoc.state, "found", "Pandoc doit être installé pour le contrôle EPUB.");
+const generalRulesContent = [
+	"*EMPREMIER* *EMSECOND* **GRAS** ~~BARRE~~ [CAPITALES]{.smallcaps} H~DEUX~ m^CARRE^ `CODEINLINE` [LIEN](https://example.org) ![IMAGE](cover.jpg)[^1]",
+	"### PREMIERH3", "### SECONDH3", "#### TITREH4", "##### TITREH5", "###### TITREH6", "### ENCOREH3", "## PARENTH2", "### APRESH2", "# PARENTH1", "### APRESH1",
+	"> CITATION", "```{.tab}\nTABULATION\n```", "```\nCODEBLOC\n```", "- ELEMENTUN\n- ELEMENTDEUX", "1. NUMERO", "| ENTETE |\n|---|\n| CELLULE |", "---", "[^1]: NOTECONTEXTUELLE",
+].join("\n\n");
+const generalInput = { sources: [{ directory, content: generalRulesContent }], ruleDefinitions, colophon: "COLOPHON", colophonCredit: "CREDIT" };
+const readRules = disabledRules => JSON.parse(execFileSync(pandoc.path, ["--from=" + path.join(root, "scripts/lua/book-reader.lua"), "--to=json"], { input: JSON.stringify({ ...generalInput, disabledRules }), encoding: "utf8" }));
+const generalAst = readRules([]), markedKinds = new Set(), markerCounts = new Map();
+const collectMarkers = value => {
+	if (!Array.isArray(value) && (!value || typeof value !== "object")) return;
+	if (Array.isArray(value) && value.length === 3 && typeof value[0] === "string" && Array.isArray(value[1])) {
+		for (const name of value[1]) if (typeof name === "string") { markedKinds.add(name); markerCounts.set(name, (markerCounts.get(name) ?? 0) + 1); }
+	}
+	for (const child of Object.values(value)) collectMarkers(child);
+};
+collectMarkers(generalAst);
+for (const rule of ruleDefinitions.filter(rule => rule.marker && rule.kind !== "title")) assert.ok(markedKinds.has(rule.marker), "Le lecteur marque la première occurrence de " + rule.kind);
+for (const rule of ruleDefinitions.filter(rule => rule.scope === "book" && rule.kind !== "title")) assert.equal(markerCounts.get(rule.marker), 1, "One book-wide occurrence across all headings: " + rule.kind);
+const h3s = generalAst.blocks.filter(block => block.t === "Header" && block.c[0] === 3);
+assert.deepEqual(h3s.map(block => block.c[1][1].includes("bookbinder-rule-h3")), [true, false, false, true, true], "H3 : première occurrence et après H1/H2, sans réinitialisation par H3/H4/H5/H6");
+const disabledAst = readRules(["h3", "em", "table"]);
+markedKinds.clear(); collectMarkers(disabledAst);
+for (const kind of ["h3", "em", "table"]) {
+	assert.ok(!markedKinds.has("bookbinder-rule-" + kind), "Pas de règle après titre pour " + kind);
+	assert.ok(!markedKinds.has("bookbinder-first-" + kind), "Pas de règle dans le livre pour " + kind);
+}
+assert.ok(markedKinds.has("bookbinder-rule-strong"), "Les autres styles gardent leurs règles");
 const repeatedSources = [
 	{ path: path.join(directory, "P1", "chapitre.md"), content: "# Partie\n\n## Août\n\nP1_AOUT\n\n[Retour](#août)\n\n### Août\n\nSuite.\n\n## Été {#fixe}\n\n[Été](#fixe)" },
 	{ path: path.join(directory, "P2", "chapitre.md"), content: "# Partie\n\n## Août\n\nP2_AOUT\n\n[Retour](#ao%C3%BBt)\n\n[Ancre réservée]{#août-2}\n\n## Été {#fixe}\n\n[Été](#fixe)" },
@@ -39,6 +66,29 @@ const tabExampleHtml = execFileSync(pandoc.path, ["--from=" + path.join(root, "s
 assert.match(tabExampleHtml, /<p class="tab"><em>Un ouvrage<\/em>, Auteur<\/p>/, "Une tabulation initiale applique le style Tabulation et conserve les italiques");
 assert.match(tabExampleHtml, /<p class="tab">Une ligne\t<strong>en gras<\/strong><\/p>/, "Markdown et tabulations dans un bloc .tab");
 assert.match(tabExampleHtml, /<pre><code>[\s\S]*\*Code littéral\*[\s\S]*<\/code><\/pre>/, "Un bloc de code explicite reste littéral");
+const tabRuleHtml = execFileSync(pandoc.path, ["--from=" + path.join(root, "scripts/lua/book-reader.lua"), "--lua-filter=" + path.join(root, "scripts/lua/epub-tab.lua"), "--to=html5", "--wrap=none"], {
+	input: JSON.stringify({ sources: [{ directory, content: "```{.tab}\n*PREMIEREITALIQUE*\n```\n\n*ITALIQUESUIVANTE*" }], ruleDefinitions }), encoding: "utf8",
+});
+assert.match(tabRuleHtml, /<p class="tab"><span class="bookbinder-rule-em bookbinder-first-em"><em>PREMIEREITALIQUE<\/em><\/span><\/p>/, "Les styles à l’intérieur de Tabulation participent aux règles communes");
+assert.match(tabRuleHtml, /<p><em>ITALIQUESUIVANTE<\/em><\/p>/, "Le style n’est pas consommé une seconde fois hors de Tabulation");
+const headingInlineHtml = execFileSync(pandoc.path, ["--from=" + path.join(root, "scripts/lua/book-reader.lua"), "--to=html5", "--wrap=none"], {
+	input: JSON.stringify({ sources: [{ directory, content: "*AVANT*\n\n## *DANSTITRE*\n\n*APRES*" }], ruleDefinitions }), encoding: "utf8",
+});
+assert.equal((headingInlineHtml.match(/class="bookbinder-rule-em(?: bookbinder-first-em)?"/g) ?? []).length, 2, "Les styles de caractères sont réinitialisés après le contenu du titre");
+assert.match(headingInlineHtml, /<span class="bookbinder-rule-em"><em>APRES<\/em><\/span>/);
+const pageSpacingHtml = execFileSync(pandoc.path, ["--from=" + path.join(root, "scripts/lua/book-reader.lua"), "--to=html5", "--wrap=none"], {
+	input: JSON.stringify({ pageBreak: "always", sources: [{ directory, content: "FIRSTNOTE" }, { directory, content: "NEWPAGEONE\n\nNEWPAGETWO\n\nNEWPAGETHREE" }] }), encoding: "utf8",
+});
+assert.match(pageSpacingHtml, /class="bookbinder-note-start">\s*<p>NEWPAGEONE<\/p>/, "A new page keeps the first paragraph's top margin");
+for (const marker of ["NEWPAGETWO", "NEWPAGETHREE"]) assert.match(pageSpacingHtml, new RegExp('class="bookbinder-continued-body">\\s*<p>' + marker + '</p>'), "Following paragraphs on the new page continue the same style");
+for (const pageBreak of [undefined, "always"]) {
+	const html = execFileSync(pandoc.path, ["--from=" + path.join(root, "scripts/lua/book-reader.lua"), "--to=html5", "--wrap=none"], { input: JSON.stringify({ pageBreak, sources: [
+		{ directory, content: "> QUOTENOTEONE" }, { directory, content: "> QUOTENOTETWO\n\n> QUOTENOTETHREE\n\nBODYRESET\n\n> QUOTERESET" },
+	] }), encoding: "utf8" });
+	assert.equal(/class="bookbinder-continued-quote">\s*<p>QUOTENOTETWO<\/p>/.test(html), !pageBreak, "Adjacent quote paragraphs continue across notes unless a page break intervenes");
+	assert.match(html, /class="bookbinder-continued-quote">\s*<p>QUOTENOTETHREE<\/p>/, "Separate quote blocks retain the same paragraph style");
+	assert.doesNotMatch(html, /class="bookbinder-continued-quote">\s*<p>QUOTERESET<\/p>/, "Body text interrupts the quote sequence");
+}
 const browser = await build({ entryPoints: [path.join(root, "plugin/cover.ts")], bundle: true, format: "iife", globalName: "BookCover", write: false });
 const options = { title: "L’expérience\\nhumaine", author: "Thierry Crouzet", subtitle: "Un sous-titre", footer: "1k signes - 24/10/2026" };
 async function renderInBrowser(options) {
@@ -278,7 +328,8 @@ for (const [separator, legacy, modern] of [["", "", ""], ["page", "always", "pag
 	}));
 	const boundaries = ast.blocks.filter(block => ["Header", "Div", "CodeBlock"].includes(block.t) && (block.t === "Header" ? block.c[1] : block.c[0])[1].includes("bookbinder-note-start"));
 	assert.equal(boundaries.length, separator ? 4 : 0, "Une coupure entre les notes non vides, sans coupure avant la première");
-	assert.equal(ast.blocks[0].t, "Para");
+	assert.equal(ast.blocks[0].t, "Div", "La première occurrence du texte courant reçoit son marqueur");
+	assert.equal(ast.blocks[1].t, "Para");
 	assert.equal(ast.blocks.at(-1).t, "CodeBlock", "Aucun séparateur final");
 	const filename = path.join(directory, `Separateur-${separator || "vide"}.epub`);
 	await exportEpub({ ...request, sources: [...separatorSources, ...sources.slice(2)], project: parseProject({ cover: "cover.jpg", fusion: { noteSeparator: separator } }, "Séparateurs"), output: filename });
@@ -357,13 +408,13 @@ for (const file of ruleFiles.filter(file => /\.(xhtml|css)$/.test(file))) {
 	}
 }
 for (const [kind, prefix] of [["body", "CORPS"], ["quote", "CITATION"], ["footnote", "NOTE"], ["tab", "TAB"]]) {
-	assert.equal((ruleHtml.match(new RegExp('class="bookbinder-after-heading-' + kind + '"', "g")) ?? []).length, 6, "Un premier paragraphe par style et par titre : " + kind);
+	assert.equal((ruleHtml.match(new RegExp('class="bookbinder-after-heading-' + kind + '"', "g")) ?? []).length, kind === "body" ? 7 : 6, "Première occurrence comprise, puis un premier paragraphe par titre : " + kind);
 	for (let level = 1; level <= 6; level++) {
 		assert.match(ruleHtml, new RegExp('class="bookbinder-after-heading-' + kind + '">\\s*</div>\\s*<p[^>]*>' + prefix + level + 'PREMIER'), "Le premier paragraphe du style après le titre " + level);
 		assert.match(ruleHtml, new RegExp('<p[^>]*>' + prefix + level + 'SUIVANT'), "Le paragraphe suivant garde son style");
 	}
 }
-assert.match(ruleHtml, /<p>AVANTTITRE<\/p>/);
+assert.match(ruleHtml, /class="bookbinder-after-heading-body">\s*<\/div>\s*<p>AVANTTITRE<\/p>/);
 assert.ok(ruleCss.includes("body .bookbinder-after-heading-body + p::first-letter{font-size:2em}"));
 assert.ok(ruleCss.includes("body blockquote .bookbinder-after-heading-quote + p::first-letter{color:red}"));
 for (const disabled of [["body", "quote"], ["footnote", "tab"]]) {
@@ -379,9 +430,149 @@ for (const disabled of [["body", "quote"], ["footnote", "tab"]]) {
 		if (file.endsWith(".css")) css += text; else html += text;
 	}
 	for (const kind of ["body", "quote", "footnote", "tab"]) {
-		assert.equal((html.match(new RegExp('class="bookbinder-after-heading-' + kind + '"', "g")) ?? []).length, disabled.includes(kind) ? 0 : 6, "Pas de règle uniquement pour le style désactivé : " + kind);
+		assert.equal((html.match(new RegExp('class="bookbinder-after-heading-' + kind + '"', "g")) ?? []).length, disabled.includes(kind) ? 0 : kind === "body" ? 7 : 6, "Pas de règle uniquement pour le style désactivé : " + kind);
 	}
 	assert.equal(css.includes("body .bookbinder-after-heading-body + p::first-letter{font-size:3em}"), !disabled.includes("body"));
+}
+const tocMarkers = ["TOCLEVELA", "TOCLEVELB", "TOCLEVELC", "TOCLEVELD", "TOCLEVELE", "TOCLEVELF"];
+const tocSources = [{ path: path.join(directory, "contents.md"), content: tocMarkers.map((marker, index) => "#".repeat(index + 1) + " " + marker + "\n\nTexte.").join("\n\n") }];
+for (const [toc, depth] of [[false, 1], [true, 1], [true, 3], [true, 6]]) {
+	const output = path.join(directory, `toc-${toc}-${depth}.epub`);
+	await exportEpub({ ...request, sources: tocSources, project: parseProject({ cover: "cover.jpg", epub: { toc, "toc-depth": depth } }, "Sommaire"), output });
+	const opf = (await exec("unzip", ["-p", output, "EPUB/content.opf"])).stdout;
+	const spine = opf.match(/<spine\b[^]*?<\/spine>/)[0];
+	assert.equal(/<itemref\b[^>]*idref="nav"/.test(spine), toc, "The EPUB reading order includes its contents page only when enabled");
+	const nav = (await exec("unzip", ["-p", output, "EPUB/nav.xhtml"])).stdout;
+	for (const [index, marker] of tocMarkers.entries()) assert.equal(new RegExp(`>${marker}</a>`).test(nav), index < depth, "EPUB navigation follows the selected depth even with no contents page");
+}
+const contextualOutput = path.join(directory, "contextual.epub");
+await exportEpub({ ...request, sources: [{ path: path.join(directory, "context.md"), content: generalRulesContent }], project: parseProject({ cover: "cover.jpg", epub: { rules: {
+	".bookbinder-rule-h3": { "font-size": "2em", color: "red" }, ".bookbinder-rule-em > em": { "font-style": "normal", "font-size": "1.5em" },
+	".bookbinder-rule-pre": { "font-size": "1.25em" }, ".bookbinder-rule-ul": { color: "blue" },
+} } }, "Context"), output: contextualOutput });
+const contextualFiles = (await exec("unzip", ["-Z1", contextualOutput])).stdout.trim().split("\n");
+let contextHtml = "", contextCss = "";
+for (const file of contextualFiles.filter(file => /\.(xhtml|css)$/.test(file))) {
+	const text = (await exec("unzip", ["-p", contextualOutput, file])).stdout;
+	if (file.endsWith(".css")) contextCss += text;
+	else contextHtml += text.match(/<body\b[^>]*>([^]*?)<\/body>/)?.[1] ?? "";
+}
+const contextRendering = await evaluateInChrome(`(() => {
+	document.body.innerHTML = ${JSON.stringify(contextHtml)};
+	const sheet = document.createElement("style"); sheet.textContent = ${JSON.stringify(contextCss)}; document.head.append(sheet);
+	const bodySize = parseFloat(getComputedStyle(document.body).fontSize);
+	const headings = Array.from(document.querySelectorAll("h3"), heading => ({ text: heading.textContent, size: parseFloat(getComputedStyle(heading).fontSize) / bodySize, color: getComputedStyle(heading).color }));
+	const emphasis = Array.from(document.querySelectorAll("em"), element => ({ text: element.textContent, style: getComputedStyle(element).fontStyle }));
+	return { headings, emphasis, sectionSize: parseFloat(getComputedStyle(document.querySelector("section.bookbinder-rule-h3")).fontSize) / bodySize, listColor: getComputedStyle(document.querySelector(".bookbinder-rule-ul > ul")).color };
+})()`, directory);
+for (const heading of contextRendering.headings) {
+	const conditional = ["PREMIERH3", "APRESH2", "APRESH1"].includes(heading.text);
+	assert.ok(Math.abs(heading.size - (conditional ? 2 : 1.3)) < .01, heading.text + " receives exactly one size override");
+	assert.equal(heading.color === "rgb(255, 0, 0)", conditional);
+}
+assert.equal(contextRendering.sectionSize, 1, "Heading rules never style Pandoc's enclosing sections");
+assert.equal(contextRendering.emphasis.find(item => item.text === "EMPREMIER").style, "normal");
+assert.equal(contextRendering.emphasis.find(item => item.text === "EMSECOND").style, "italic");
+assert.equal(contextRendering.listColor, "rgb(0, 0, 255)");
+for (const body of [{}, { "font-family": "sans-serif", "font-size": "1.25em" }]) {
+	const output = path.join(directory, Object.keys(body).length ? "follow-body-explicit.epub" : "follow-body-auto.epub");
+	await exportEpub({ ...request, sources: [{ path: path.join(directory, "follow.md"), content: "### BODYHEADING\n\nBODYPARAGRAPH\n\n> BIGQUOTE `BODYCODE`" }], project: parseProject({ cover: "cover.jpg", epub: { style: body,
+		headings: { h3: { "font-family": "body", "font-size": "body", "page-position": "one-third", "page-offset": "40mm" } }, styles: { "blockquote p": { "font-family": "monospace", "font-size": "2em" }, code: { "font-family": "body", "font-size": "body" } },
+	} }, "Follow body"), output });
+	const files = (await exec("unzip", ["-Z1", output])).stdout.trim().split("\n");
+	let html = "", css = "";
+	for (const file of files.filter(file => /\.(xhtml|css)$/.test(file))) {
+		const text = (await exec("unzip", ["-p", output, file])).stdout;
+		if (file.endsWith(".css")) css += text; else html += text.match(/<body\b[^>]*>([^]*?)<\/body>/)?.[1] ?? "";
+	}
+	assert.doesNotMatch(css, /font-(?:family|size):body(?:[;}])/);
+	const result = await evaluateInChrome(`(() => {
+		document.body.innerHTML = ${JSON.stringify(html)};
+		const sheet = document.createElement("style"); sheet.textContent = ${JSON.stringify(css)}; document.head.append(sheet);
+		const check = () => { const body = getComputedStyle(document.body); return ["h3", "code"].every(selector => { const style = getComputedStyle(document.querySelector(selector)); return style.fontSize === body.fontSize && style.fontFamily === body.fontFamily; }); };
+		const gap = () => parseFloat(getComputedStyle(document.querySelector("h3")).paddingTop);
+		const initial = check(), offsets = [gap()]; document.documentElement.style.fontSize = "24px";
+		const resized = check(); offsets.push(gap()); document.querySelector("h3").style.fontSize = "4em"; offsets.push(gap());
+		return { initial, resized, offsets };
+	})()`, directory);
+	assert.ok(result.initial && result.resized, "Body font/size references survive EPUB conversion, nested formatting and reader font-size changes");
+	assert.ok(result.offsets.every(offset => Math.abs(offset - 40 * 96 / 25.4) < .1), "The exported EPUB keeps the same gap when reader and heading sizes change");
+}
+const zeroTopOutput = path.join(directory, "zero-top-headings.epub");
+const bookFirstOutput = path.join(directory, "first-in-book.epub");
+await exportEpub({ ...request, sources: [
+	{ path: path.join(directory, "book-a.md"), content: await readFile(path.join(root, "scripts/fixtures/first-in-book.md"), "utf8") },
+	{ path: path.join(directory, "book-b.md"), content: "# BOOKPARENTH1\n\n### BOOKAFTERH1\n\nBOOKBODYAFTERH1" },
+], project: parseProject({ title: "BOOKTITLE", cover: "cover.jpg", epub: { rules: {
+	".bookbinder-first-title": { "font-size": "2.5em" }, ".bookbinder-rule-title": { "font-size": "2em" },
+	".bookbinder-first-h3": { "font-size": "2em" }, ".bookbinder-rule-h3": { "font-size": "1.5em", color: "red" },
+	".bookbinder-first-body + p": { "font-size": "1.5em" }, ".bookbinder-after-heading-body + p::first-letter": { "font-size": "2em" },
+	".bookbinder-first-em > em": { "font-size": "1.5em", "font-style": "normal" }, ".bookbinder-rule-em > em": { "font-size": "1.25em" },
+} } }, "Book first"), output: bookFirstOutput });
+const bookFirstFiles = (await exec("unzip", ["-Z1", bookFirstOutput])).stdout.trim().split("\n");
+let bookFirstHtml = "", bookFirstCss = "";
+for (const file of bookFirstFiles.filter(file => /\.(xhtml|css)$/.test(file))) {
+	const text = (await exec("unzip", ["-p", bookFirstOutput, file])).stdout;
+	if (file.endsWith(".css")) bookFirstCss += text; else bookFirstHtml += text.match(/<body\b[^>]*>([^]*?)<\/body>/)?.[1] ?? "";
+}
+const bookFirstRendering = await evaluateInChrome(`(() => {
+	document.body.innerHTML = ${JSON.stringify(bookFirstHtml)};
+	const sheet = document.createElement("style"); sheet.textContent = ${JSON.stringify(bookFirstCss)}; document.head.append(sheet);
+	const elements = Array.from(document.querySelectorAll("h1,h3,p,em"));
+	const find = text => text === "BOOKTITLE" ? document.querySelector("h1.title") : elements.findLast(element => element.textContent === text);
+	const sizes = Object.fromEntries(["BOOKTITLE", "BOOKFIRSTH3", "BOOKSECONDH3", "BOOKSTILLNORMAL", "BOOKAFTERH2", "BOOKAFTERH1", "ZBOOKFIRSTBODY", "BOOKFIRSTEM", "BOOKSECONDEM", "BOOKEMAFTERH2"].map(text => [text, parseFloat(getComputedStyle(find(text)).fontSize)]));
+	return { sizes, initial: parseFloat(getComputedStyle(find("ZBOOKFIRSTBODY"), "::first-letter").fontSize), bookMarkers: document.querySelectorAll("h3.bookbinder-first-h3").length };
+})()`, directory);
+for (const [marker, size] of Object.entries({ BOOKTITLE: 40, BOOKFIRSTH3: 32, BOOKSECONDH3: 20.8, BOOKSTILLNORMAL: 20.8, BOOKAFTERH2: 24, BOOKAFTERH1: 24, ZBOOKFIRSTBODY: 24, BOOKFIRSTEM: 24, BOOKSECONDEM: 16, BOOKEMAFTERH2: 20 })) assert.ok(Math.abs(bookFirstRendering.sizes[marker] - size) < .1, marker + " receives the correct first-book/after-heading style: " + bookFirstRendering.sizes[marker]);
+assert.equal(bookFirstRendering.initial, 48, "An initial inherits the first-book paragraph size");
+assert.equal(bookFirstRendering.bookMarkers, 1, "Only the first H3 across all notes is marked as first in book");
+await exportEpub({ ...request, sources: [
+	{ path: path.join(directory, "zero-a.md"), content: [1, 2, 3, 4, 5, 6].map(level => "#".repeat(level) + " ZEROTOPH" + level + "\n\nTexte après le titre.").join("\n\n") },
+	{ path: path.join(directory, "zero-b.md"), content: "\n\n### ZEROTOPNOTE\n\nTexte de la note suivante." },
+], project: parseProject({ cover: "cover.jpg", fusion: { noteSeparator: "page" }, epub: {
+	headings: Object.fromEntries([1, 2, 3, 4, 5, 6].map(level => ["h" + level, { "margin-top": "0em" }])),
+	rules: { ".bookbinder-rule-h3": { "margin-top": "0em" } },
+} }, "Zero top"), output: zeroTopOutput });
+const zeroTopFiles = (await exec("unzip", ["-Z1", zeroTopOutput])).stdout.trim().split("\n");
+let zeroTopHtml = "", zeroTopCss = "";
+for (const file of zeroTopFiles.filter(file => /\.(xhtml|css)$/.test(file))) {
+	const text = (await exec("unzip", ["-p", zeroTopOutput, file])).stdout;
+	if (file.endsWith(".css")) zeroTopCss += text; else zeroTopHtml += text.match(/<body\b[^>]*>([^]*?)<\/body>/)?.[1] ?? "";
+}
+const zeroTopHeadings = await evaluateInChrome(`(() => {
+	document.body.innerHTML = ${JSON.stringify(zeroTopHtml)};
+	const sheet = document.createElement("style"); sheet.textContent = ${JSON.stringify(zeroTopCss)}; document.head.append(sheet);
+	return Array.from(document.querySelectorAll("h1,h2,h3,h4,h5,h6")).filter(heading => heading.textContent.startsWith("ZEROTOP")).map(heading => ({
+		text: heading.textContent, margin: parseFloat(getComputedStyle(heading).marginTop), padding: parseFloat(getComputedStyle(heading).paddingTop),
+		firstElement: heading.parentElement.firstElementChild === heading,
+	}));
+})()`, directory);
+assert.equal(zeroTopHeadings.length, 7);
+for (const heading of zeroTopHeadings) {
+	assert.equal(heading.margin, 0, heading.text + " has zero top margin");
+	assert.equal(heading.padding, 0, heading.text + " has no residual padding");
+	assert.ok(heading.firstElement, heading.text + " has no inserted paragraph or spacer before it");
+}
+const spacingOutput = path.join(directory, "paragraph-spacing.epub");
+await exportEpub({ ...request, sources: [{ path: path.join(directory, "spacing.md"), content: await readFile(path.join(root, "scripts/fixtures/paragraph-spacing.md"), "utf8") }], project: parseProject({ cover: "cover.jpg", colophon: "COLONE\n\nCOLTWO", epub: { style: { "margin-top": "1em", "margin-bottom": "2em" },
+	styles: Object.fromEntries(["blockquote p", "section.footnotes p", "p.tab", ".bookbinder-colophon p"].map(selector => [selector, { "margin-top": "1em", "margin-bottom": "2em" }])),
+} }, "Spacing"), output: spacingOutput });
+const spacingFiles = (await exec("unzip", ["-Z1", spacingOutput])).stdout.trim().split("\n");
+let spacingHtml = "", spacingCss = "";
+for (const file of spacingFiles.filter(file => /\.(xhtml|css)$/.test(file))) {
+	const text = (await exec("unzip", ["-p", spacingOutput, file])).stdout;
+	if (file.endsWith(".css")) spacingCss += text; else spacingHtml += text.match(/<body\b[^>]*>([^]*?)<\/body>/)?.[1] ?? "";
+}
+const spacingParagraphs = await evaluateInChrome(`(() => {
+	document.body.innerHTML = ${JSON.stringify(spacingHtml)};
+	const sheet = document.createElement("style"); sheet.textContent = ${JSON.stringify(spacingCss)}; document.head.append(sheet);
+	return Array.from(document.querySelectorAll("p")).map(paragraph => { const style = getComputedStyle(paragraph); return { text: paragraph.textContent.trim(), top: parseFloat(style.marginTop) / parseFloat(style.fontSize), bottom: parseFloat(style.marginBottom) / parseFloat(style.fontSize) }; });
+})()`, directory);
+for (const marker of ["BODYONE", "QUOTEONE", "BODYRESET", "TABONE", "BODYAFTERTAB", "FOOTONE", "COLONE"]) {
+	const paragraph = spacingParagraphs.find(paragraph => paragraph.text.startsWith(marker)); assert.ok(paragraph, marker); assert.ok(Math.abs(paragraph.top - 1) < .01, marker + " keeps its leading top margin");
+}
+for (const marker of ["BODYTWO", "BODYTHREE", "QUOTETWO", "QUOTETHREE", "QUOTEFOUR", "TABTWO", "TABTHREE", "FOOTTWO", "FOOTTHREE", "COLTWO"]) {
+	const paragraph = spacingParagraphs.find(paragraph => paragraph.text.startsWith(marker)); assert.ok(paragraph, marker); assert.equal(paragraph.top, 0, marker + " drops the repeated top margin"); assert.ok(Math.abs(paragraph.bottom - 2) < .01, marker + " preserves its bottom margin");
 }
 console.log("EPUB réel : couverture Canvas 1600×2400, fusion en mémoire, quatre séparateurs, projets exclus, images relatives, notes locales, XHTML valide et conservation du dernier export : OK.");
 console.log(`Résultats : ${directory}`);

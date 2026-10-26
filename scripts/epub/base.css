@@ -20,6 +20,7 @@ p{
 
 
 h1, h2, h3, h4, h5, h6 {
+    line-height:1.2;
     hyphens: none;
     -webkit-hyphens: none;
     -ms-hyphens: none;
@@ -70,7 +71,7 @@ h3{
     font-size:1.3em;
     margin-bottom:1em;
     margin-top:3em;margin-right:0em;margin-left:0em;text-indent:0em;text-align:center;font-style:normal;padding-left:0em;padding-right:0em;
-    padding-top:3em;
+    padding-top:0;
 }
 
 /* Exergue */

@@ -1,9 +1,10 @@
 import { t } from "./i18n.ts";
 import * as path from "node:path";
 import { isProjectNote } from "./project-view.ts";
-import { bookStyles, contextRules } from "./book-styles.ts";
-import { pdfPage } from "./page-layout.ts";
+import { bookStyles, contextRules, folioStyle } from "./book-styles.ts";
+import { millimetres, pdfPage } from "./page-layout.ts";
 import { defaultFilename, slugFilename } from "./filename.ts";
+import { applyDefaultFont, defaultPdfFont } from "./presentation.ts";
 export { isProjectNote };
 export { projectCss } from "./presentation.ts";
 
@@ -28,7 +29,9 @@ export interface BookProject {
 	css: string[];
 	fonts: string[];
 	separator?: string;
+	toc: boolean;
 	tocDepth: number;
+	titlePage: { copyright: boolean; characterCount: boolean };
 	splitLevel: number;
 	style: Record<string, string | number>;
 	page: Record<string, string | number>;
@@ -69,10 +72,26 @@ const styleProperties = new Set([
 	"margin-bottom", "margin-left", "margin-right", "color", "font-weight", "font-style", "page-break-before", "display", "letter-spacing",
 ]);
 
-function styles(value: unknown, field: string): Record<string, string | number> {
+function styles(value: unknown, field: string, heading = false): Record<string, string | number> {
 	const result = { ...object(value, field) };
 	for (const [name, setting] of Object.entries(result)) {
-		if (name === "page-position" && (/^(epub|pdf)\.headings\.h[1-6]$/.test(field) || /^(epub|pdf)\.styles\.h1\.title$/.test(field)) && setting === "one-third") {
+		if (name === "hyphens") {
+			if (!/^(pdf|docx)\./.test(field) || !["auto", "none"].includes(String(setting))) throw new Error(t("fieldNameInvalidPresentationValue", { field, name }));
+			continue;
+		}
+		if (name === "folio") {
+			const rule = contextRules.find(rule => field === "pdf.rules." + rule.selector);
+			if (!(/^pdf\.headings\.h[1-6]$/.test(field) || field === "pdf.styles..bookbinder-colophon p" || rule && !rule.pseudo && /^h[1-6]$/.test(rule.paragraph!)) || !["show", "hide"].includes(String(setting))) throw new Error(t("fieldNameInvalidPresentationValue", { field, name }));
+			continue;
+		}
+		if (name === "page-offset" && /^epub\./.test(field) && (heading || /^epub\.(headings\.h[1-6]|styles\.h1\.title)$/.test(field))) {
+			const offset = typeof setting === "string" || typeof setting === "number" ? millimetres(setting) : NaN;
+			if (!Number.isFinite(offset) || offset < 0 || offset > 300) throw new Error(t("fieldNameInvalidPresentationValue", { field, name }));
+			continue;
+		}
+		if (setting === "body" && (!["font-family", "font-size"].includes(name) || /^(epub|pdf|docx)\.style$/.test(field))) throw new Error(t("fieldNameInvalidPresentationValue", { field, name }));
+		if (name === "page-break-before" && (/^(pdf|docx)\.headings\.h[1-6]$/.test(field) || heading && /^(pdf|docx)\./.test(field)) && !["auto", "always", "left", "right"].includes(String(setting))) throw new Error(t("fieldNameInvalidPresentationValue", { field, name }));
+		if (name === "page-position" && (heading || /^(epub|pdf|docx)\.headings\.h[1-6]$/.test(field) || /^(epub|pdf|docx)\.styles\.h1\.title$/.test(field) || field === "pdf.styles..bookbinder-colophon p") && (setting === "one-third" || /^(pdf|docx)\./.test(field) && setting === "normal")) {
 			continue;
 		}
 		if (!styleProperties.has(name)) throw new Error(t("fieldNameUnknownSetting", { field: field, name: name }));
@@ -92,8 +111,8 @@ export function parseProject(value: unknown, defaultTitle: string, format: "epub
 	}
 	metadata.title ??= defaultTitle;
 	metadata.lang ??= "fr";
-	for (const key of ["subtitle", "author", "colophon"]) if (metadata[key] === null) delete metadata[key];
-	for (const key of ["title", "subtitle", "lang", "colophon"]) {
+	for (const key of ["subtitle", "author", "colophon", "rights"]) if (metadata[key] === null) delete metadata[key];
+	for (const key of ["title", "subtitle", "lang", "colophon", "rights"]) {
 		if (metadata[key] !== undefined && typeof metadata[key] !== "string") throw new Error(t("fieldMustBeText", { field: key }));
 	}
 	if (!String(metadata.title).trim()) metadata.title = defaultTitle;
@@ -116,12 +135,13 @@ export function parseProject(value: unknown, defaultTitle: string, format: "epub
 	const namedStyles: BookProject["styles"] = {};
 	const rules: BookProject["rules"] = {};
 	for (const [name, setting] of Object.entries(object(epub.styles, `${format}.styles`))) {
-		if (!bookStyles.some(style => style.selector === name && style.sample)) throw new Error(t("epubStylesNameUnknownStyle", { name: name }));
+		if (!bookStyles.some(style => style.selector === name && style.sample) && !(format !== "epub" && name === folioStyle.selector)) throw new Error(t("epubStylesNameUnknownStyle", { name: name }));
 		namedStyles[name] = styles(setting, `${format}.styles.${name}`);
 	}
 	for (const [name, setting] of Object.entries(object(epub.rules, `${format}.rules`))) {
-		if (!contextRules.some(rule => rule.selector === name)) throw new Error(t("epubRulesNameUnknownRule", { name: name }));
-		rules[name] = styles(setting, `${format}.rules.${name}`);
+		const rule = contextRules.find(rule => rule.selector === name);
+		if (!rule) throw new Error(t("epubRulesNameUnknownRule", { name: name }));
+		rules[name] = styles(setting, `${format}.rules.${name}`, !rule.pseudo);
 	}
 	const paragraph = styles(epub.style, `${format}.style`);
 	const disabledRules = epub["disabled-rules"] ?? [];
@@ -135,20 +155,29 @@ export function parseProject(value: unknown, defaultTitle: string, format: "epub
 	if (epub.separator !== undefined && (typeof epub.separator !== "string" || epub.separator.includes("\0"))) {
 		throw new Error(t("epubSeparatorMustContainSeparatorCharacters"));
 	}
-	for (const key of Object.keys(page)) if (!["margin-top", "margin-bottom", "margin-left", "margin-right", ...(format === "pdf" ? ["paper-size", "paper-width", "paper-height", "page-mode", "margin-inner", "margin-outer", "binding-offset"] : [])].includes(key)) throw new Error(t("epubPageUseTheFourPageMargins"));
+	if (epub.toc !== undefined && typeof epub.toc !== "boolean") throw new Error(t("fieldNameInvalidPresentationValue", { field: format, name: "toc" }));
+	const titlePage = object(epub["title-page"], `${format}.title-page`);
+	for (const [name, value] of Object.entries(titlePage)) {
+		if (!["copyright", "character-count"].includes(name) || typeof value !== "boolean" || format === "epub") throw new Error(t("fieldNameInvalidPresentationValue", { field: `${format}.title-page`, name }));
+	}
+	for (const key of Object.keys(page)) if (!["margin-top", "margin-bottom", "margin-left", "margin-right", ...(format !== "epub" ? ["paper-size", "paper-width", "paper-height", "page-mode", "margin-inner", "margin-outer", "binding-offset", "folio-position", "folio-offset"] : [])].includes(key)) throw new Error(t("epubPageUseTheFourPageMargins"));
 	styles(Object.fromEntries(Object.entries(page).filter(([key]) => ["margin-top", "margin-bottom", "margin-left", "margin-right"].includes(key))), `${format}.page`);
-	if (format === "pdf") pdfPage(page);
-	return {
+	if (format !== "epub") pdfPage(page);
+	const project: BookProject = {
 		metadata, filename, fusion, headings, page, styles: namedStyles, rules, disabledRules: disabledRules as string[],
 		cover: strings(data.cover, "cover")[0],
 		background: strings(data["cover-background"], "cover-background")[0],
 		css: strings(epub.css, `${format}.css`),
 		fonts: strings(epub.fonts, `${format}.fonts`),
 		separator: epub.separator,
+		toc: epub.toc ?? format !== "epub",
 		tocDepth: depth(epub["toc-depth"], 2, `${format}.toc-depth`),
+		titlePage: { copyright: titlePage.copyright === true, characterCount: titlePage["character-count"] === true },
 		splitLevel: depth(epub["split-level"], 2, `${format}.split-level`),
 		style: paragraph,
 	};
+	if (format !== "epub") applyDefaultFont(project, defaultPdfFont);
+	return project;
 }
 
 export function excluded(relativePath: string, options: FusionOptions): boolean {

@@ -553,9 +553,11 @@ $endif$
 $if(title)$
 \BookbinderBody
 \begin{titlepage}
+\pagestyle{empty}
 \thispagestyle{empty}
 $if(bookbinder-cover)$
-\noindent\includegraphics[width=\textwidth,height=.9\textheight,keepaspectratio]{$bookbinder-cover$}
+\noindent\includegraphics[width=\textwidth,height=$if(bookbinder-title-details)$.8$else$.9$endif$\textheight,keepaspectratio]{$bookbinder-cover$}
+$if(bookbinder-title-details)$\vfill$endif$
 $else$
 $bookbinder-title-before$
 $title$\par
@@ -568,7 +570,10 @@ $endif$
 \vfill
 $if(publisher)$\begin{center}$publisher$\end{center}$endif$
 $endif$
+$if(bookbinder-copyright)$\begin{center}\small $bookbinder-copyright$\end{center}$endif$
+$if(bookbinder-character-count)$\begin{center}\small $bookbinder-character-count$\end{center}$endif$
 \end{titlepage}
+\setcounter{page}{\numexpr\ReadonlyShipoutCounter+1\relax}
 $if(abstract)$
 \begin{abstract}
 $abstract$
@@ -606,6 +611,7 @@ $endif$
 $if(has-frontmatter)$
 \mainmatter
 $endif$
+\setcounter{page}{\numexpr\ReadonlyShipoutCounter+1\relax}
 \pagestyle{plain}
 \BookbinderBody
 $body$

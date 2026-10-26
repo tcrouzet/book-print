@@ -8,9 +8,10 @@ import { resources } from "../scripts/resources";
 import { excluded, isProjectNote, parseProject } from "./project";
 import { exportEpub, type BookSource } from "./epub";
 import { exportPdf } from "./pdf.ts";
+import { exportDocx } from "./docx.ts";
 import { renderCover } from "./cover";
 import { compareVersions, detectTool } from "./tools";
-import { EPUB_VIEW, EpubView } from "./epub-view";
+import { EPUB_VIEW, DOCX_VIEW, BookFileView } from "./book-file-view";
 import { readProjectFile } from "./project-files";
 import { linkProjectNote } from "./project-view";
 import { openProjectEditor } from "./project-modal";
@@ -36,9 +37,12 @@ export default class BookbinderPlugin extends Plugin {
 		for (const error of await loadTranslationFiles(path.join(this.pluginDirectory, "locales"))) new Notice(error);
 		this.settings = parseSettings(await this.loadData());
 		this.addSettingTab(new BookbinderSettingTab(this.app, this));
-		this.registerView(EPUB_VIEW, leaf => new EpubView(leaf));
-		try { this.registerExtensions(["epub"], EPUB_VIEW); }
-		catch (error) { console.debug(t("bookbinderTheEpubAssociationWasLeftUnchanged"), error); }
+		for (const format of ["epub", "docx"] as const) {
+			const view = format === "docx" ? DOCX_VIEW : EPUB_VIEW;
+			this.registerView(view, leaf => new BookFileView(leaf, format));
+			try { this.registerExtensions([format], view); }
+			catch (error) { console.debug(t(format === "docx" ? "bookbinderTheDocxAssociationWasLeftUnchanged" : "bookbinderTheEpubAssociationWasLeftUnchanged"), error); }
+		}
 		this.registerObsidianProtocolHandler("bookbinder", async parameters => {
 			try {
 				const file = parameters.file === undefined ? this.app.workspace.getActiveFile() : this.app.vault.getAbstractFileByPath(parameters.file);
@@ -52,16 +56,18 @@ export default class BookbinderPlugin extends Plugin {
 		this.registerEvent(this.app.workspace.on("file-menu", (menu, file) => {
 			if (!(file instanceof TFolder) && !(file instanceof TFile && file.extension.toLowerCase() === "md")) return;
 			if (file instanceof TFile && isProjectNote(file.path)) return;
-			for (const format of ["pdf", "epub"] as const) menu.addItem(item => item.setTitle(format === "pdf" ? "Book to PDF" : "Book to ePub").setIcon("book-open").onClick(() => {
+			for (const format of ["pdf", "docx", "epub"] as const) menu.addItem(item => item.setTitle(format === "pdf" ? "Book to PDF" : format === "docx" ? "Book to Docx" : "Book to ePub").setIcon("book-open").onClick(() => {
 				void this.generateBook(file, format);
 			}));
 		}));
 	}
 
-	async generateBook(source: TFile | TFolder, format: "epub" | "pdf"): Promise<void> {
+	async generateBook(source: TFile | TFolder, format: "epub" | "pdf" | "docx"): Promise<void> {
 		if (this.exporting) { new Notice(t("aBookbinderExportIsAlreadyRunning")); return; }
 		this.exporting = true;
-		const notice = new Notice(t(format === "pdf" ? "preparingPdf" : "preparingEpub"), 0);
+		const notice = new Notice(t(format === "pdf" ? "preparingPdf" : format === "docx" ? "preparingDocx" : "preparingEpub"), 0);
+		notice.messageEl.classList.add("bookbinder-export-progress");
+		notice.messageEl.setAttribute("role", "status");
 		try {
 			const adapter = this.app.vault.adapter;
 			if (!(adapter instanceof FileSystemAdapter)) throw new Error(t("exportRequiresObsidianOnDesktop"));
@@ -97,7 +103,7 @@ export default class BookbinderPlugin extends Plugin {
 				if (latex.state !== "found") throw new Error(t("errorOpenSettingsBookbinder", { error: latex.message }));
 				xelatex = latex.path;
 			}
-			notice.setMessage(t(format === "pdf" ? "generatingPdf" : "generatingEpub"));
+			notice.setMessage(t(format === "pdf" ? "generatingPdf" : format === "docx" ? "generatingDocx" : "generatingEpub"));
 			const output = path.join(this.settings.outputDirectory || directory, `${project.filename}.${format}`);
 			const request = { project, sources, directory, output, pandoc: pandoc.path, resources, renderCover, confirmOverwrite, fontDirectory: this.fontDirectory, resolveImage: (target: string, sourcePath: string) => {
 				const vaultPath = path.relative(adapter.getBasePath(), sourcePath).split(path.sep).join("/");
@@ -106,10 +112,10 @@ export default class BookbinderPlugin extends Plugin {
 				if (destination.extension.toLowerCase() === "md") throw new Error(t("embeddingNoteTargetInSourceIsNotSupportedYet", { target: target, source: vaultPath }));
 				return adapter.getFullPath(destination.path);
 			} };
-			const generated = format === "pdf" ? await exportPdf({ ...request, xelatex }) : await exportEpub(request);
-			if (generated) new Notice(t(format === "pdf" ? "pdfCreatedFilename" : "epubCreatedFilename", { filename: generated }), 10000);
+			const generated = format === "pdf" ? await exportPdf({ ...request, xelatex }) : format === "docx" ? await exportDocx(request) : await exportEpub(request);
+			if (generated) new Notice(t(format === "pdf" ? "pdfCreatedFilename" : format === "docx" ? "docxCreatedFilename" : "epubCreatedFilename", { filename: generated }), 10000);
 		} catch (error) {
-			new Notice(t(format === "pdf" ? "bookToPdfError" : "bookToEpubError", { error: error instanceof Error ? error.message : String(error) }), 15000);
+			new Notice(t(format === "pdf" ? "bookToPdfError" : format === "docx" ? "bookToDocxError" : "bookToEpubError", { error: error instanceof Error ? error.message : String(error) }), 15000);
 		} finally {
 			notice.hide();
 			this.exporting = false;

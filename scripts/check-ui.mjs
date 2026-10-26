@@ -9,6 +9,7 @@ import { build } from "esbuild";
 import ts from "typescript";
 import { evaluateInChrome } from "./browser-check.mjs";
 import { setLocale, t } from "../plugin/i18n.ts";
+import { detectFontFace } from "../plugin/font-metadata.ts";
 
 setLocale("fr");
 
@@ -18,14 +19,14 @@ const settingsClass = settingsSource.statements.find(node => ts.isClassDeclarati
 const definitionsMethod = settingsClass.members.find(node => ts.isMethodDeclaration(node) && node.name.getText(settingsSource) === "getSettingDefinitions");
 const definitions = new Function("t", definitionsMethod.body.getText(settingsSource)).call(new Proxy({}, { get() { throw new Error("Settings indexing must not access the app or run I/O"); } }), t);
 const indexedSettings = definitions.flatMap(group => group.items);
-for (const name of ["Projet de livre", "Cloner un projet", "Dossier de génération", "Pandoc", "LaTeX", "Chemins personnalisés", "Bibliothèque de polices", "Package de polices"]) {
+for (const name of ["Projet de livre", "Cloner un projet", t("outputFolder"), "Pandoc", "LaTeX", "Chemins personnalisés", "Bibliothèque de polices", "Package de polices"]) {
  assert.ok(indexedSettings.some(setting => setting.name === name && typeof setting.render === "function"), "Searchable setting: " + name);
 }
 for (const language of ["en", "de-DE"]) {
 	setLocale(language);
 	const englishDefinitions = new Function("t", definitionsMethod.body.getText(settingsSource)).call(new Proxy({}, { get() { throw new Error("Settings indexing must not access the app or run I/O"); } }), t);
 	const names = englishDefinitions.flatMap(group => group.items.map(setting => setting.name));
-	for (const name of ["Book project", "Clone a project", "Output folder", "Custom paths", "Font library", "Font package"]) assert.ok(names.includes(name), "English searchable setting: " + name);
+	for (const name of ["Book project", "Clone a project", t("outputFolder"), "Custom paths", "Font library", "Font package"]) assert.ok(names.includes(name), "English searchable setting: " + name);
 }
 setLocale("fr");
 const directory = await mkdtemp(path.join(tmpdir(), "bookbinder-ui-"));
@@ -39,7 +40,7 @@ setCoreLocale("fr");
 const fontPath = process.env.BOOKBINDER_TEST_FONT || "/System/Library/Fonts/Supplemental/Times New Roman.ttf";
 const font = await loadFont(fontPath);
 const browser = await build({
-	stdin: { contents: 'export * from "./plugin/i18n.ts"; export * from "./plugin/filename.ts"; export * from "./plugin/font-catalog.ts"; export { StyleEditor } from "./plugin/style-editor.ts"; export * from "./plugin/page-layout.ts"; export { pdfBaseCss } from "./plugin/pdf-presentation.ts"; export { mountProjectTabs } from "./plugin/project-tabs.ts"; export { renderCover } from "./plugin/cover.ts"; export { fontFamily } from "./plugin/presentation.ts"; export { linkProjectNote } from "./plugin/project-view.ts";', resolveDir: root },
+	stdin: { contents: 'export * from "./plugin/i18n.ts"; export * from "./plugin/filename.ts"; export * from "./plugin/font-catalog.ts"; export { StyleEditor } from "./plugin/style-editor.ts"; export * from "./plugin/page-layout.ts"; export { pdfBaseCss } from "./plugin/pdf-presentation.ts"; export { mountProjectTabs } from "./plugin/project-tabs.ts"; export { renderCover } from "./plugin/cover.ts"; export * from "./plugin/presentation.ts"; export { linkProjectNote } from "./plugin/project-view.ts";', resolveDir: root },
 	bundle: true, format: "iife", globalName: "BookUI", write: false,
 });
 const styles = await readFile(path.join(root, "styles.css"), "utf8");
@@ -106,10 +107,25 @@ const check = async assets => {
 	const style = document.createElement("style");
 	style.textContent = assets.styles + "body{font:16px/1.5 sans-serif;margin:24px}h1{font-size:24px}.bookbinder-project-presentation{max-width:1000px}";
 	document.head.append(style);
+	const progress = makeEl("div"); progress.className = "bookbinder-export-progress"; progress.textContent = BookUI.t("preparingEpub"); document.body.append(progress);
+	const wheel = getComputedStyle(progress, "::before");
+	assert(wheel.animationIterationCount === "infinite" && parseFloat(wheel.width) > 0 && parseFloat(wheel.height) > 0, "La roue de génération reste visible et animée pendant l’export");
+	const rotation = progress.getAnimations({ subtree: true }).find(animation => animation.animationName === "bookbinder-export-spin");
+	assert(rotation, "Une animation native fait tourner la roue");
+	rotation.pause(); rotation.currentTime = 0; const initialRotation = getComputedStyle(progress, "::before").transform;
+	rotation.currentTime = 500;
+	assert(getComputedStyle(progress, "::before").transform !== initialRotation, "La roue tourne réellement");
+	progress.textContent = BookUI.t("generatingEpub");
+	assert(getComputedStyle(progress, "::before").animationName === "bookbinder-export-spin", "Mettre à jour le message conserve la roue");
+	progress.remove();
 	const tokens = { "--text-accent": "#6d28d9", "--text-muted": "#666", "--background-secondary": "#f3f3f3", "--background-modifier-border": "#ccc", "--interactive-accent": "#6d28d9", "--text-on-accent": "white", "--font-small": "13px", "--size-4-1": "4px", "--size-4-2": "8px", "--size-4-3": "12px", "--size-4-4": "16px", "--size-4-6": "24px", "--radius-m": "8px" };
 	for (const [name, value] of Object.entries(tokens)) document.documentElement.style.setProperty(name, value);
 	document.documentElement.style.setProperty("--text-error", "#b00020");
 	assert(getComputedStyle(explorer.querySelector("span")).color === "rgb(109, 40, 217)", "Projet Markdown dans la couleur d’accentuation");
+	for (const name of ["livre.epub", "livre.docx", "LIVRE.DOCX"]) {
+		explorer.querySelector(".nav-file-title").dataset.path = "Livres/" + name;
+		assert(getComputedStyle(explorer.querySelector("span")).color === "rgb(109, 40, 217)", "Export visible dans la couleur d’accentuation : " + name);
+	}
 	explorer.querySelector(".nav-file-title").dataset.path = "Livres/book-print.md";
 	assert(getComputedStyle(explorer.querySelector("span")).color !== "rgb(109, 40, 217)", "Only bookbinder.md is highlighted as a project");
 	explorer.remove();
@@ -119,7 +135,12 @@ const check = async assets => {
 	const layout = document.createElement("div"); layout.className = "bookbinder-project-layout"; host.append(layout);
 	const panels = ["bookbinder-project-information", "bookbinder-project-format", "bookbinder-project-format", "bookbinder-project-format"].map(name => { const panel = document.createElement("div"); panel.className = name; layout.append(panel); return panel; });
 	panels[0].textContent = "Généralités du livre";
-	const paper = document.createElement("div"); paper.className = "bookbinder-paper-format"; panels[0].append(paper);
+	const formatPanels = panels.slice(1).map((panel, index) => {
+		const tabs = document.createElement("div"); tabs.className = "bookbinder-project-tabs"; panel.append(tabs);
+		const children = ["bookbinder-project-page", "bookbinder-project-presentation", ...(index === 2 ? ["bookbinder-project-presentation"] : [])].map(name => { const child = document.createElement("div"); child.className = name; panel.append(child); return child; });
+		return { tabs, children };
+	});
+	const paper = document.createElement("div"); paper.className = "bookbinder-paper-format"; formatPanels[0].children[0].append(paper);
 	let refreshPaper = () => {};
 	const paperPage = {}; BookUI.mountPaperFormat(paper, paperPage, () => refreshPaper(), makeEl);
 	const paperSelect = paper.querySelector("select");
@@ -133,48 +154,220 @@ const check = async assets => {
 	assert(paper.querySelector(".bookbinder-page-fields").hidden, "Les dimensions sont réservées au format personnalisé");
 	paperSelect.value = "custom"; paperSelect.dispatchEvent(new Event("change"));
 	assert(paper.querySelector('[aria-label="Largeur (mm)"]').value === "162.5", "Changer de format préserve les dimensions personnalisées");
-	const formatPanels = panels.slice(1).map((panel, index) => {
-		const tabs = document.createElement("div"); tabs.className = "bookbinder-project-tabs"; panel.append(tabs);
-		const children = ["bookbinder-project-page", "bookbinder-project-presentation", ...(index === 2 ? ["bookbinder-project-presentation"] : [])].map(name => { const child = document.createElement("div"); child.className = name; panel.append(child); return child; });
-		return { tabs, children };
-	});
 	const epubPanel = panels[3];
+	for (const [index, format] of ["pdf", "docx", "epub"].entries()) {
+		const settings = { toc: format !== "epub", tocDepth: 2 };
+		const toc = makeEl("div"); formatPanels[index].children[0].append(toc);
+		let tocChanges = 0; BookUI.mountTableOfContents(toc, settings, format, () => tocChanges++, makeEl);
+		const toggle = toc.querySelector('[aria-label="Afficher le sommaire"]'), depth = toc.querySelector('[aria-label="Profondeur"]');
+		assert(toggle.value === String(settings.toc) && depth.value === "2" && depth.options.length === 6, "Sommaire et profondeur sont visibles dans Page de chaque format");
+		depth.value = "6"; depth.dispatchEvent(new Event("change"));
+		assert(settings.tocDepth === 6 && tocChanges === 1, "Le choix de profondeur est enregistré");
+		toggle.value = "false"; toggle.dispatchEvent(new Event("change"));
+		assert(!settings.toc && depth.disabled === (format !== "epub"), "Sans sommaire imprimé, la profondeur EPUB reste disponible pour la navigation");
+		toggle.value = "true"; toggle.dispatchEvent(new Event("change"));
+		assert(settings.toc && !depth.disabled && depth.value === "6", "Réactiver le sommaire conserve la profondeur choisie");
+		if (format !== "epub") {
+			const options = { copyright: false, characterCount: true };
+			BookUI.mountTitlePage(toc, options, () => tocChanges++, makeEl);
+			const copyright = toc.querySelector('[aria-label="Copyright"]'), count = toc.querySelector('[aria-label="Nombre de signes"]');
+			assert(copyright.type === "checkbox" && !copyright.checked && count.checked, "Les options de page de garde reflètent le projet");
+			copyright.click(); count.click();
+			assert(options.copyright && !options.characterCount && tocChanges === 5, "Les deux cases sont enregistrées indépendamment");
+		}
+	}
 	const container = formatPanels[2].children[1];
 	const presentation = { style: {}, page: {}, headings: {}, fonts: [] };
 	let changed = 0;
 	let closeRequested = 0;
 	const libraryFonts = assets.packageFonts.map(font => "library:" + font.path.split("/").pop());
+	const faceInfo = new Map(assets.packageFonts.map(font => ["library:" + font.path.split("/").pop(), font.face]));
+	const fontFace = reference => faceInfo.get(reference);
 	let fontSelection;
 	const fontRequests = [];
 	const editor = new BookUI.StyleEditor(container, presentation, assets.baseCss, () => changed++, () => closeRequested++, {
-		sanitizeHTMLToDom: parseSample, createEl: makeEl, fontLibrary: () => libraryFonts, fontType: reference => reference === "library:" + assets.fontName ? "serif" : undefined,
+		sanitizeHTMLToDom: parseSample, createEl: makeEl, fontLibrary: () => libraryFonts, fontFace, fontType: reference => reference === "library:" + assets.fontName ? "serif" : undefined,
 		selectFont: (reference, apply) => fontSelection = (async () => {
 			fontRequests.push(reference);
-			const asset = assets.packageFonts.find(font => "library:" + font.path.split("/").pop() === reference);
-			assert(asset, "Le choix provient de la bibliothèque installée");
-			await editor.addFont(reference, Uint8Array.from(atob(asset.data), character => character.charCodeAt(0)));
+			for (const source of BookUI.fontResources(reference, libraryFonts, fontFace)) {
+				const asset = assets.packageFonts.find(font => "library:" + font.path.split("/").pop() === source);
+				assert(asset, "Le choix provient de la bibliothèque installée");
+				await editor.addFont(source, Uint8Array.from(atob(asset.data), character => character.charCodeAt(0)), asset.face);
+			}
 			apply();
 		})(),
 	});
 	await editor.ready;
 	const installedChoices = Array.from(container.querySelector('[aria-label="Police"]').options, option => option.value);
-	assert(libraryFonts.every(reference => installedChoices.includes(BookUI.fontFamily(reference))), "Toutes les polices installées doivent être proposées dans les styles sans activation préalable dans Généralités");
+	assert(!installedChoices.includes(BookUI.fontFamily("library:EBGaramond-Bold.otf")) && !installedChoices.includes(BookUI.fontFamily("library:EBGaramond-Italic.otf")), "Les variantes grasses et italiques ne sont plus des choix de police séparés");
+	assert(installedChoices.length === BookUI.fontCatalog.families.length + 4, "Chaque famille installée apparaît une seule fois, avec Auto et les trois familles génériques");
 	assert(presentation.fonts.length === 0 && presentation.style["font-family"] === undefined, "Afficher la bibliothèque conserve le corps en Auto et ne sélectionne aucune police");
-	for (const family of BookUI.fontCatalog.families) for (const filename of family.files) {
-		const option = Array.from(container.querySelector('[aria-label="Police"]').options).find(item => item.value === BookUI.fontFamily(filename));
-		assert(option.textContent.endsWith("(" + BookUI.fontTypeLabel(family.category) + ")"), "Chaque nom de police est suivi de son type : " + filename);
+	for (const family of BookUI.fontCatalog.families) {
+		const options = Array.from(container.querySelector('[aria-label="Police"]').options).filter(item => family.files.some(filename => item.value === BookUI.fontFamily(filename)));
+		assert(options.length === 1 && options[0].textContent.endsWith("(" + BookUI.fontTypeLabel(family.category) + ")"), "Une seule famille, suivie de son type : " + family.name);
 	}
 	await editor.mountPage(formatPanels[2].children[0]);
 	const rulesPanel = formatPanels[2].children[2];
-	const ruleEditor = new BookUI.StyleEditor(rulesPanel, presentation, assets.baseCss, () => changed++, undefined, { sanitizeHTMLToDom: parseSample, createEl: makeEl, format: "epub", rules: true, fontLibrary: () => libraryFonts });
+	const ruleEditor = new BookUI.StyleEditor(rulesPanel, presentation, assets.baseCss, () => changed++, undefined, { sanitizeHTMLToDom: parseSample, createEl: makeEl, format: "epub", rules: true, fontLibrary: () => libraryFonts, fontFace });
 	await ruleEditor.ready;
-	assert(libraryFonts.every(reference => Array.from(rulesPanel.querySelector('[aria-label="Police"]').options).some(option => option.value === BookUI.fontFamily(reference))), "Les règles proposent également toute la bibliothèque");
+	assert(Array.from(rulesPanel.querySelector('[aria-label="Police"]').options).map(option => option.value).filter(value => value !== "body").join("|") === installedChoices.join("|"), "Les règles proposent les mêmes familles regroupées et la référence au texte courant");
 	const otherEditors = [];
 	for (const [index, format] of formatPanels.slice(0, 2).entries()) {
-		const independent = new BookUI.StyleEditor(format.children[1], { style: {}, page: index === 0 ? paperPage : {}, headings: {}, fonts: [] }, index === 0 ? BookUI.pdfBaseCss : assets.baseCss, () => changed++, undefined, { sanitizeHTMLToDom: parseSample, createEl: makeEl, format: index === 0 ? "pdf" : "docx" });
+		const independent = new BookUI.StyleEditor(format.children[1], { style: {}, page: index === 0 ? paperPage : {}, headings: {}, fonts: [] }, BookUI.pdfBaseCss, () => changed++, undefined, { sanitizeHTMLToDom: parseSample, createEl: makeEl, format: index === 0 ? "pdf" : "docx", fontLibrary: () => libraryFonts, fontFace });
 		await independent.ready;
+		for (const asset of assets.packageFonts.filter(asset => asset.path.startsWith("EBGaramond-"))) {
+			await independent.addFont("library:" + asset.path, Uint8Array.from(atob(asset.data), character => character.charCodeAt(0)), asset.face);
+		}
 		const marginFields = document.createElement("div"); marginFields.className = "bookbinder-page-fields"; format.children[0].append(marginFields);
 		await independent.mountPage(marginFields); otherEditors.push(independent);
+		const folioPosition = marginFields.querySelector('[aria-label="Position du folio"]');
+		const folioOffset = marginFields.querySelector('[aria-label="Distance du bas (mm)"]');
+		assert(folioPosition.value === "center" && folioOffset.value === "10", "Folio centré à 10 mm par défaut en PDF et DOCX");
+		assert(Array.from(folioPosition.options, option => option.textContent).join("|") === "Sans folio|Gauche|Centré|Droite|Intérieur|Extérieur", "Toutes les positions de folio sont proposées");
+		folioPosition.value = "none"; folioPosition.dispatchEvent(new Event("change"));
+		assert(folioOffset.disabled && independent.presentation.page["folio-position"] === "none", "Sans folio désactive la distance");
+		folioPosition.value = "outer"; folioPosition.dispatchEvent(new Event("change"));
+		folioOffset.value = "8 mm"; folioOffset.dispatchEvent(new Event("input")); folioOffset.dispatchEvent(new Event("blur"));
+		assert(!folioOffset.disabled && folioOffset.value === "8" && independent.presentation.page["folio-offset"] === "8mm", "Le placement du folio est enregistré en mm");
+		const inspector = format.children[1], styleChoice = inspector.querySelector('[aria-label="Style"]');
+		const approach = () => inspector.querySelector('[aria-label="Approche"]');
+		assert(approach() && approach().value === "0" && !approach().closest("label").dataset.unit, "Approche sans unité, à zéro dans les deux formats imprimés");
+		for (const [input, stored] of [["+10", "0.01em"], ["-10", "-0.01em"], ["0.01em", "0.01em"]]) {
+			approach().value = input; approach().dispatchEvent(new Event("input")); approach().dispatchEvent(new Event("blur"));
+			assert(independent.presentation.style["letter-spacing"] === stored && approach().checkValidity(), "L’approche est exprimée en millièmes de cadratin : " + input);
+		}
+		const bodySize = inspector.querySelector('[aria-label="Corps (pt)"]'); bodySize.value = "22"; bodySize.dispatchEvent(new Event("input"));
+		assert(approach().value === "10", "L’approche relative ne change pas quand le corps double");
+		const leading = inspector.querySelector('[aria-label="Interligne (pt)"]');
+		const leadingPoints = () => { const preview = inspector.querySelector("iframe"); return parseFloat(preview.contentWindow.getComputedStyle(preview.contentDocument.querySelector("p")).lineHeight) * .75; };
+		assert(leading.value === "" && leading.placeholder === "Auto" && Math.abs(leadingPoints() - 22 * 1.2) < .01, "L’interligne Auto suit le corps dans les deux aperçus imprimés");
+		leading.value = "30"; leading.dispatchEvent(new Event("input"));
+		bodySize.value = "11"; bodySize.dispatchEvent(new Event("input"));
+		assert(leading.value === "30" && Math.abs(leadingPoints() - 30) < .01, "Une valeur saisie en points reste fixe quand le corps change");
+		styleChoice.value = "h3"; styleChoice.dispatchEvent(new Event("change"));
+		const headingPreview = inspector.querySelector("iframe"), headingComputed = headingPreview.contentWindow.getComputedStyle(headingPreview.contentDocument.querySelector("h3"));
+		assert(Math.abs(parseFloat(headingComputed.lineHeight) / parseFloat(headingComputed.fontSize) - 1.2) < .01, "Les titres conservent un interligne normal même avec un interligne fixe du corps");
+		assert(!inspector.querySelector('[aria-label="Césures automatiques"]').checked, "Les titres ne sont pas coupés par défaut");
+		styleChoice.value = "p"; styleChoice.dispatchEvent(new Event("change"));
+		let hyphens = inspector.querySelector('[aria-label="Césures automatiques"]');
+		assert(hyphens.checked, "Les césures du corps sont actives par défaut en PDF et DOCX");
+		hyphens.click(); assert(independent.presentation.style.hyphens === "none", "Désactiver les césures est enregistré");
+		independent.refresh(); hyphens = inspector.querySelector('[aria-label="Césures automatiques"]');
+		assert(!hyphens.checked, "Les césures restent désactivées à la réouverture");
+		hyphens.click(); assert(independent.presentation.style.hyphens === "auto", "Réactiver les césures est enregistré");
+		const restoredLeading = inspector.querySelector('[aria-label="Interligne (pt)"]');
+		restoredLeading.value = ""; restoredLeading.dispatchEvent(new Event("input")); restoredLeading.dispatchEvent(new Event("blur"));
+		assert(restoredLeading.value === "" && restoredLeading.placeholder === "Auto" && independent.presentation.style["line-height"] === undefined && Math.abs(leadingPoints() - 11 * 1.2) < .01, "Effacer l’interligne restaure Auto, y compris après le blur");
+		approach().value = "oops"; approach().dispatchEvent(new Event("input"));
+		assert(!approach().checkValidity() && independent.presentation.style["letter-spacing"] === "0.01em", "Une approche invalide préserve la dernière valeur");
+		independent.presentation.style["letter-spacing"] = "0.11pt"; independent.refresh();
+		assert(approach().value === "10" && independent.presentation.style["letter-spacing"] === "0.11pt", "Un ancien réglage absolu est affiché en approche sans être réécrit");
+		approach().value = ""; approach().dispatchEvent(new Event("input")); approach().dispatchEvent(new Event("blur"));
+		assert(approach().value === "0" && independent.presentation.style["letter-spacing"] === undefined, "Effacer l’approche restaure le modèle imprimé");
+		assert(inspector.querySelector('[aria-label="Corps (pt)"]').value === "11" && inspector.querySelector('[aria-label="Interligne (pt)"]').value === "" && inspector.querySelector('[aria-label="Interligne (pt)"]').placeholder === "Auto", "Les deux formats imprimés partagent Garamond 11 pt et un interligne Auto");
+		styleChoice.value = "hr"; styleChoice.dispatchEvent(new Event("change"));
+		const appearance = () => inspector.querySelector('[aria-label="Aspect du séparateur"]');
+		assert(appearance().value === "line", "Le séparateur imprimé propose le filet par défaut");
+		appearance().value = "characters"; appearance().dispatchEvent(new Event("change"));
+		const separatorInput = inspector.querySelector('[aria-label="Caractères du séparateur"]');
+		separatorInput.value = "* · *"; separatorInput.dispatchEvent(new Event("input"));
+		assert(independent.presentation.separator === "* · *" && inspector.querySelector("iframe").contentDocument.querySelector('[data-book-style="hr"]').textContent === "* · *", "PDF et DOCX enregistrent les caractères du séparateur et actualisent l’aperçu");
+		appearance().value = "line"; appearance().dispatchEvent(new Event("change"));
+		assert(independent.presentation.separator === undefined && !inspector.querySelector('[aria-label="Caractères du séparateur"]'), "Le filet retire les caractères dans les deux formats imprimés");
+		appearance().value = "characters"; appearance().dispatchEvent(new Event("change"));
+		assert(inspector.querySelector('[aria-label="Caractères du séparateur"]').value === "* · *", "Le choix Caractères restaure la saisie imprimée");
+		styleChoice.value = "p"; styleChoice.dispatchEvent(new Event("change"));
+		for (let level = 1; level <= 6; level++) {
+			const change = (label, value, event = "change") => { const input = inspector.querySelector('[aria-label="' + label + '"]'); input.value = value; input.dispatchEvent(new Event(event)); };
+			change("Style", "h" + level);
+			const folio = inspector.querySelector('[aria-label="Afficher le folio sur la page du titre"]');
+			if (index === 0) {
+				assert(folio?.type === "checkbox" && folio.checked, "Chaque style de titre PDF propose le folio par défaut");
+				Array.from(inspector.querySelectorAll('[role="tab"]')).find(tab => tab.textContent === "Enchaînement").click();
+				const toggle = folio.closest("label"), box = folio.getBoundingClientRect(), text = toggle.querySelector("span").getBoundingClientRect();
+				assert(box.width > 0 && box.width <= 32 && box.height <= 32, "La case Folio conserve sa taille native sans étirement");
+				assert(getComputedStyle(toggle).flexDirection === "row" && Math.abs((box.top + box.bottom - text.top - text.bottom) / 2) < 2 && box.left >= text.right, "Le texte et la case Folio sont côte à côte et centrés sur la même ligne");
+				folio.click(); assert(independent.presentation.headings["h" + level].folio === "hide", "Décocher le folio se sauvegarde dans le style PDF");
+				folio.click(); assert(independent.presentation.headings["h" + level].folio === undefined, "Recocher rétablit le folio du modèle");
+			} else assert(!folio, "DOCX ne propose pas ce réglage PDF");
+			assert(Array.from(inspector.querySelector('[aria-label="Saut de page avant"]').options, option => option.textContent).join("|") === "Sans saut|Page suivante|Page paire|Page impaire", "Chaque niveau de titre imprimé propose les quatre sauts");
+			change("Saut de page avant", "left"); change("Position du titre", "one-third");
+			let input = inspector.querySelector('[aria-label="Saut de page avant"]');
+			assert(!input.disabled && input.value === "left" && input.querySelector('[value="auto"]').disabled, "La page paire reste sélectionnable pour un titre placé au tiers");
+			change("Saut de page avant", "right");
+			assert(independent.presentation.headings["h" + level]["page-break-before"] === "right", "Le titre conserve son saut de page impaire");
+			const top = inspector.querySelector('[aria-label="Marge haute (pt)"]');
+			assert(!top.disabled, "La marge haute reste modifiable au tiers de page dans PDF et DOCX");
+			Array.from(inspector.querySelectorAll('[role="tab"]')).find(tab => tab.textContent === "Paragraphe").click(); top.focus();
+			change("Marge haute (pt)", "0", "input");
+			assert(document.activeElement === top && independent.presentation.headings["h" + level]["margin-top"] === "0pt", "Saisir zéro garde le focus et enregistre la marge haute");
+			assert(independent.presentation.headings["h" + level]["page-position"] === undefined && inspector.querySelector('[aria-label="Position du titre"]').value === "", "La marge explicite rétablit immédiatement la position normale");
+			assert(inspector.querySelector('[aria-label="Saut de page avant"]').value === "right" && !inspector.querySelector('[aria-label="Saut de page avant"] [value="auto"]').disabled, "La parité est conservée et Sans saut redevient disponible");
+			change("Position du titre", ""); change("Saut de page avant", "auto");
+			assert(independent.presentation.headings["h" + level]["page-break-before"] === "auto", "Sans saut est disponible à la position normale");
+			inspector.querySelector('[aria-label="Réinitialiser ce style"]').click();
+		}
+		styleChoice.value = ".bookbinder-colophon p"; styleChoice.dispatchEvent(new Event("change"));
+		let colophonPosition = inspector.querySelector('[aria-label="Position du colophon"]');
+		if (index === 0) {
+			assert(colophonPosition?.value === "", "Le Colophon PDF propose une position normale par défaut");
+			const folio = inspector.querySelector('[aria-label="Afficher le folio sur les pages du colophon"]');
+			assert(folio?.checked && getComputedStyle(folio.closest("label")).flexDirection === "row", "Le folio du Colophon est coché par défaut et reste sur la même ligne que son texte");
+			folio.click(); assert(independent.presentation.styles[".bookbinder-colophon p"].folio === "hide", "Le Colophon PDF peut masquer ses folios");
+			folio.click(); assert(independent.presentation.styles[".bookbinder-colophon p"].folio === undefined, "Recocher restaure les folios du Colophon");
+			const top = inspector.querySelector('[aria-label="Marge haute (pt)"]'); top.value = "9"; top.dispatchEvent(new Event("input"));
+			colophonPosition.value = "one-third"; colophonPosition.dispatchEvent(new Event("change"));
+			assert(independent.presentation.styles[".bookbinder-colophon p"]["page-position"] === "one-third" && !inspector.querySelector('[aria-label="Marge haute (pt)"]').disabled, "La marge haute du Colophon reste modifiable au tiers");
+			assert(independent.presentation.styles[".bookbinder-colophon p"]["margin-top"] === "9pt", "La marge normale est conservée");
+			const preview = inspector.querySelector("iframe"), colophon = preview.contentDocument.querySelector(".bookbinder-colophon");
+			assert(parseFloat(preview.contentWindow.getComputedStyle(colophon).paddingTop) > 0, "L’aperçu positionne le bloc Colophon entier");
+			assert(Array.from(colophon.querySelectorAll("p")).every(p => preview.contentWindow.getComputedStyle(p).paddingTop === "0px"), "Le texte et le crédit ne répètent pas le décalage dans l’aperçu");
+			colophonPosition = inspector.querySelector('[aria-label="Position du colophon"]'); colophonPosition.value = ""; colophonPosition.dispatchEvent(new Event("change"));
+			assert(!inspector.querySelector('[aria-label="Marge haute (pt)"]').disabled && independent.presentation.styles[".bookbinder-colophon p"]["page-position"] === undefined, "La position normale restaure les marges");
+			inspector.querySelector('[aria-label="Réinitialiser ce style"]').click();
+		} else { assert(!colophonPosition, "Ce réglage Colophon est réservé au PDF"); assert(!inspector.querySelector('[aria-label="Afficher le folio sur les pages du colophon"]'), "Le folio du Colophon est réservé au PDF"); }
+		styleChoice.value = ".bookbinder-folio"; styleChoice.dispatchEvent(new Event("change"));
+		assert(styleChoice.selectedOptions[0].textContent === "Folio" && inspector.querySelector('[aria-label="Aligner : Droite"]').getAttribute("aria-pressed") === "true", "Le style Folio reflète son placement dans Page");
+		assert(!inspector.querySelector('[aria-label="Saut de page avant"]'), "Le folio ne peut pas provoquer de saut de page");
+		const folioSize = inspector.querySelector('[aria-label="Corps (pt)"]'); folioSize.value = "10"; folioSize.dispatchEvent(new Event("input"));
+		assert(independent.presentation.styles[".bookbinder-folio"]["font-size"] === "10pt", "Le folio utilise les mêmes réglages de style");
+		inspector.querySelector('[aria-label="Aligner : Gauche"]').click();
+		assert(independent.presentation.page["folio-position"] === "left" && marginFields.querySelector('[aria-label="Position du folio"]').value === "left", "L’alignement du style et la position Page restent synchronisés");
+		styleChoice.value = "p"; styleChoice.dispatchEvent(new Event("change"));
+		const ruleContainer = document.createElement("div"); format.children[1].append(ruleContainer);
+		const rulePresentation = structuredClone(independent.presentation);
+		const printRules = new BookUI.StyleEditor(ruleContainer, rulePresentation, BookUI.pdfBaseCss, () => {}, undefined, { sanitizeHTMLToDom: parseSample, createEl: makeEl, format: index === 0 ? "pdf" : "docx", rules: true });
+		await printRules.ready;
+		const ruleField = label => ruleContainer.querySelector('[aria-label="' + label + '"]');
+		const ruleChange = (label, value) => { const input = ruleField(label); input.value = value; input.dispatchEvent(new Event("change")); };
+		assert(!Array.from(ruleField("Style").options, option => option.value).includes(".bookbinder-folio"), "Les règles s’appliquent aux styles du manuscrit");
+		for (const style of Array.from(ruleField("Style").options, option => option.value)) {
+			ruleChange("Style", style);
+			assert(ruleField("Règle").options[0].textContent === "Pas de règle" && ruleField("Règle").options.length >= 2, "Une règle pour chaque style : " + style);
+		}
+		ruleChange("Style", "h3"); ruleChange("Règle", ".bookbinder-rule-h3"); ruleChange("Saut de page avant", "right");
+		assert(rulePresentation.rules[".bookbinder-rule-h3"]["page-break-before"] === "right", "La règle du premier H3 peut imposer une page impaire");
+		ruleChange("Règle", ".bookbinder-first-h3"); ruleChange("Saut de page avant", "auto");
+		const ruleFolio = ruleField("Afficher le folio sur la page du titre");
+		if (index === 0) { ruleFolio.click(); assert(rulePresentation.rules[".bookbinder-first-h3"].folio === "hide", "Une règle de titre PDF peut masquer le folio"); }
+		else assert(!ruleFolio, "Les règles DOCX ne proposent pas ce réglage PDF");
+		assert(rulePresentation.rules[".bookbinder-first-h3"]["page-break-before"] === "auto" && rulePresentation.rules[".bookbinder-rule-h3"]["page-break-before"] === "right", "La première occurrence dans le livre se règle indépendamment des suivantes après titre");
+		rulePresentation.headings.h3["page-position"] = "one-third"; printRules.refresh();
+		assert(ruleField("Position du titre").value === "one-third" && !ruleField("Marge haute (pt)").disabled, "Une règle reflète le tiers hérité sans verrouiller sa marge");
+		ruleField("Marge haute (pt)").value = "5mm"; ruleField("Marge haute (pt)").dispatchEvent(new Event("input"));
+		assert(rulePresentation.rules[".bookbinder-first-h3"]["page-position"] === "normal" && Math.abs(parseFloat(rulePresentation.rules[".bookbinder-first-h3"]["margin-top"]) - 360 / 25.4) < .00001, "La marge d’une règle annule le tiers hérité et accepte les unités");
+		assert(rulePresentation.headings.h3["page-position"] === "one-third" && ruleField("Position du titre").value === "", "La règle ne modifie pas la position du style de base");
+		delete rulePresentation.headings.h3["page-position"]; printRules.refresh();
+		ruleChange("Style", "p");
+		assert(ruleField("Règle").value === ".bookbinder-first-body + p", "Le choix Dans le livre suit le style sélectionné");
+		ruleChange("Style", "h3");
+		ruleChange("Règle", ".bookbinder-rule-h3::first-letter");
+		assert(!ruleField("Saut de page avant"), "Une règle de caractère ne propose pas de saut de page inopérant");
+		ruleChange("Style", "blockquote p"); ruleChange("Règle", "blockquote .bookbinder-after-heading-quote + p");
+		assert(Array.from(ruleField("Saut de page avant").options, option => option.value).join("|") === "auto|always|left|right", "Les règles de tous les styles de bloc offrent la même pagination");
+		ruleChange("Style", "h3"); ruleChange("Règle", "");
+		assert(rulePresentation.disabledRules.includes("h3") && !ruleField("Corps (pt)"), "Pas de règle désactive aussi les règles des titres");
+		printRules.dispose(); ruleContainer.remove();
 	}
 	refreshPaper = () => otherEditors[0].refresh();
 	for (const [index, format] of formatPanels.entries()) BookUI.mountProjectTabs(format.tabs, format.children, index === 2 ? ["Page", "Styles", "Règles"] : ["Page", "Styles"], () => { (index === 2 ? editor : otherEditors[index]).refresh(); if (index === 2) ruleEditor.refresh(); }, makeEl);
@@ -183,10 +376,60 @@ const check = async assets => {
 	assert(getComputedStyle(layout).display === "block" && getComputedStyle(host).resize === "both", "Fenêtre en une colonne et redimensionnable");
 	const pdfStyles = Array.from(formatPanels[0].children[1].querySelector('[aria-label="Style"]').options, option => option.value);
 	assert(pdfStyles.includes("h1.title") && pdfStyles.includes("p.tab") && pdfStyles.includes(".bookbinder-colophon p"), "Le PDF propose les styles Markdown du même éditeur que l’EPUB");
+	assert(formatPanels[0].children[1].querySelector('[aria-label="Corps (pt)"]').value === "11", "Le PDF affiche le corps du modèle LaTeX au lieu de Auto");
+	const pdfInspector = formatPanels[0].children[1];
+	const pdfField = name => pdfInspector.querySelector('[aria-label="' + name + '"]');
+	const pdfChange = (name, value, event = "change") => { const input = pdfField(name); input.value = value; input.dispatchEvent(new Event(event, { bubbles: true })); };
+	const explicitPdfValues = () => assert(!Array.from(pdfInspector.querySelectorAll("option")).some(option => option.textContent === "Auto" && !["Police", "Origine du corps"].includes(option.parentElement.getAttribute("aria-label"))) && !pdfInspector.querySelector('[data-auto="true"]') && !Array.from(pdfInspector.querySelectorAll("input")).some(input => input.placeholder === "Auto" && input.dataset.property !== "line-height"), "Le PDF garde des valeurs concrètes, avec Auto pour l’interligne et les sources de police/taille");
+	explicitPdfValues();
+	const defaultPdfFamily = BookUI.fontFamily("library:EBGaramond-Regular.otf");
+	assert(pdfField("Police").value === defaultPdfFamily && pdfField("Police").options[0].value === defaultPdfFamily && pdfField("Police").options[0].textContent === "EB Garamond (Serif)" && pdfField("Police").children[1].tagName === "HR", "EB Garamond est sélectionnée en tête, avant le HR commun à l’ePub");
+	assert(pdfField("Interligne (pt)").value === "" && pdfField("Interligne (pt)").placeholder === "Auto" && pdfField("Alinéa (pt)").value === "13.2" && pdfField("Marge haute (pt)").value === "0", "Interligne Auto, alinéa et marges réels du modèle PDF");
+	assert(pdfField("Gras").getAttribute("aria-pressed") === "false" && pdfField("Italique").getAttribute("aria-pressed") === "false" && pdfField("Aligner : Justifié").getAttribute("aria-pressed") === "true", "États effectifs des boutons PDF");
+	assert(pdfField("Couleur du texte").value === "#000000" && pdfField("Saut de page avant").value === "auto", "Texte noir et absence de saut de page par défaut");
+	for (const text of ["5mm", "5 mm"]) {
+		pdfChange("Marge haute (pt)", text, "input");
+		assert(pdfField("Marge haute (pt)").checkValidity() && Math.abs(parseFloat(otherEditors[0].presentation.style["margin-top"]) - 360 / 25.4) < .00001, "Conversion PDF en points : " + text);
+		pdfField("Marge haute (pt)").dispatchEvent(new Event("blur"));
+		assert(Math.abs(Number(pdfField("Marge haute (pt)").value) - 360 / 25.4) < .00001, "Le champ affiche sa valeur convertie en points");
+	}
+	const previousMargin = otherEditors[0].presentation.style["margin-top"];
+	pdfChange("Marge haute (pt)", "5 bananas", "input");
+	assert(!pdfField("Marge haute (pt)").checkValidity() && otherEditors[0].presentation.style["margin-top"] === previousMargin, "Une unité inconnue bloque la validation sans écraser le dernier réglage");
+	pdfChange("Marge haute (pt)", "", "input"); pdfField("Marge haute (pt)").dispatchEvent(new Event("blur"));
+	pdfChange("Corps (pt)", "14", "input");
+	assert(otherEditors[0].presentation.style["font-size"] === "14pt" && pdfField("Alinéa (pt)").value === "16.8", "Les valeurs dépendantes PDF suivent la taille modifiée");
+	pdfChange("Corps (pt)", "", "input"); pdfField("Corps (pt)").dispatchEvent(new Event("blur"));
+	assert(pdfField("Corps (pt)").value === "11" && otherEditors[0].presentation.style["font-size"] === undefined, "Effacer restaure le corps réel du modèle PDF");
+	for (const expected of ["true", "false", "true"]) { pdfField("Italique").click(); assert(pdfField("Italique").getAttribute("aria-pressed") === expected, "Italique PDF à deux états"); }
+	pdfField("Réinitialiser ce style").click();
+	assert(pdfField("Italique").getAttribute("aria-pressed") === "false" && otherEditors[0].presentation.style["font-style"] === undefined, "Réinitialiser restaure les valeurs du modèle PDF");
+	assert(pdfField("Police").value === defaultPdfFamily && pdfField("Police").options[0].value === defaultPdfFamily && pdfField("Police").children[1].tagName === "HR", "Réinitialiser conserve EB Garamond dans le groupe utilisé");
+	const otherPdfFamily = BookUI.fontFamily("library:NotoSerif-Regular.otf");
+	pdfChange("Police", otherPdfFamily);
+	assert(pdfField("Police").options[0].value === otherPdfFamily && pdfField("Police").children[1].tagName === "HR" && otherEditors[0].presentation.fonts.length === 4 && otherEditors[0].presentation.fonts.every(reference => reference.startsWith("library:NotoSerif-")), "Le PDF reclasse sa famille et sélectionne ses quatre variantes");
+	pdfField("Réinitialiser ce style").click();
+	assert(pdfField("Police").value === defaultPdfFamily && otherEditors[0].presentation.fonts.length === 4 && otherEditors[0].presentation.fonts.every(reference => reference.startsWith("library:EBGaramond-")), "Réinitialiser le PDF rétablit EB Garamond et ses quatre variantes");
+	pdfField("Gras").click(); pdfField("Italique").click();
+	const pdfSample = pdfInspector.querySelector("iframe").contentDocument.querySelector("p");
+	assert(pdfField("Police").value === defaultPdfFamily && pdfSample.ownerDocument.defaultView.getComputedStyle(pdfSample).fontWeight === "700" && pdfSample.ownerDocument.defaultView.getComputedStyle(pdfSample).fontStyle === "italic", "Les boutons PDF utilisent les variantes de la famille sélectionnée");
+	pdfField("Réinitialiser ce style").click();
+	pdfChange("Style", "h2");
+	assert(pdfField("Corps (pt)").value === "16.5" && pdfField("Marge haute (pt)").value === "16.5" && pdfField("Marge basse (pt)").value === "8.25" && pdfField("Gras").getAttribute("aria-pressed") === "true" && pdfField("Saut de page avant").value === "always", "Le titre PDF affiche ses propres valeurs de modèle");
+	assert(pdfField("Position du titre").selectedOptions[0].textContent === "Position normale", "Position PDF explicite");
+	pdfChange("Style", "code");
+	assert(pdfField("Police").value === "monospace", "Le code PDF conserve la police à chasse fixe");
+	pdfChange("Style", "em"); assert(pdfField("Italique").getAttribute("aria-pressed") === "true", "L’emphase PDF est italique par défaut");
+	for (const selector of pdfStyles) {
+		pdfChange("Style", selector); explicitPdfValues();
+		assert(Array.from(pdfInspector.querySelectorAll('.bookbinder-length-input')).every(input => (input.value !== "" || input.dataset.property === "line-height" && input.placeholder === "Auto") && input.checkValidity()), "Valeurs PDF valides et interligne Auto pour " + selector);
+	}
+	pdfChange("Style", "p"); explicitPdfValues();
+	assert(otherEditors[0].presentation.style["font-size"] === undefined, "Afficher les défauts PDF ne fige pas leur héritage dans le projet");
 	const tabs = navigation.querySelectorAll("button");
 	tabs[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
 	assert(!panels[1].hidden && document.activeElement === tabs[1], "Navigation clavier vers PDF");
-	const marginBoxes = Array.from(formatPanels[0].children[0].querySelectorAll("label"), label => label.getBoundingClientRect());
+	const marginBoxes = Array.from(formatPanels[0].children[0].querySelectorAll(":scope > .bookbinder-page-fields > label"), label => label.getBoundingClientRect());
 	assert(Math.abs(marginBoxes[0].y - marginBoxes[1].y) < 1 && Math.abs(marginBoxes[2].y - marginBoxes[3].y) < 1 && marginBoxes[2].y > marginBoxes[0].y, "Les marges s’affichent deux par ligne");
 	assert(Array.from(tabs, tab => tab.textContent).join("|") === "Généralités|PDF|DOCX|ePub", "Onglets par format");
 	for (const index of [1, 2, 3]) {
@@ -200,9 +443,12 @@ const check = async assets => {
 	}
 	assert(new Set(Array.from(host.querySelectorAll('[role="tab"]'), tab => tab.id)).size === host.querySelectorAll('[role="tab"]').length, "Identifiants uniques entre onglets imbriqués");
 	tabs[1].click(); formatPanels[0].tabs.querySelectorAll("button")[0].click();
-	const pdfMargin = formatPanels[0].children[0].querySelector("input"); pdfMargin.value = "19"; pdfMargin.dispatchEvent(new Event("input", { bubbles: true }));
+	const pdfMargin = formatPanels[0].children[0].querySelector('[aria-label="Marge haute de page (mm)"]'); pdfMargin.value = "19"; pdfMargin.dispatchEvent(new Event("input", { bubbles: true }));
 	assert(otherEditors[0].presentation.page["margin-top"] === "19mm" && otherEditors[1].presentation.page["margin-top"] === undefined && presentation.page["margin-top"] === undefined, "Marges PDF, DOCX et ePub indépendantes");
-	const pageMode = paper.querySelector('[aria-label="Mise en page PDF"]');
+	pdfMargin.value = ""; pdfMargin.dispatchEvent(new Event("input")); pdfMargin.dispatchEvent(new Event("blur"));
+	assert(pdfMargin.value === "20" && otherEditors[0].presentation.page["margin-top"] === undefined, "Effacer une marge PDF réaffiche les 20 mm du modèle");
+	pdfMargin.value = "19"; pdfMargin.dispatchEvent(new Event("input"));
+	const pageMode = paper.querySelector('[aria-label="Mise en page"]');
 	assert(pageMode.value === "single", "Simple page par défaut");
 	pageMode.value = "double"; pageMode.dispatchEvent(new Event("change"));
 	const pdfPageFields = formatPanels[0].children[0];
@@ -216,8 +462,17 @@ const check = async assets => {
 	pageMode.value = "single"; pageMode.dispatchEvent(new Event("change"));
 	assert(pdfPageFields.querySelector('[aria-label="Marge gauche de page (mm)"]') && !pdfPageFields.querySelector('[aria-label="Marge intérieure de page (mm)"]') && paperPage["margin-inner"] === "24mm", "Le retour en simple page conserve les valeurs des deux modes");
 	tabs[2].click();
-	const docxBody = formatPanels[1].children[1].querySelector('[aria-label="Corps (pt)"]'); docxBody.value = "13"; docxBody.dispatchEvent(new Event("input", { bubbles: true }));
+	const docxBody = formatPanels[1].children[1].querySelector('[aria-label="Corps (pt)"]'); docxBody.value = "5 mm"; docxBody.dispatchEvent(new Event("input", { bubbles: true }));
+	assert(Math.abs(parseFloat(otherEditors[1].presentation.style["font-size"]) - 360 / 25.4) < .00001, "La saisie avec unité est partagée avec DOCX");
+	docxBody.value = "13"; docxBody.dispatchEvent(new Event("input", { bubbles: true }));
 	assert(otherEditors[1].presentation.style["font-size"] === "13pt" && otherEditors[0].presentation.style["font-size"] === undefined && presentation.style["font-size"] === undefined, "Styles PDF, DOCX et ePub indépendants");
+	const docxInspector = formatPanels[1].children[1];
+	const docxFont = docxInspector.querySelector('[aria-label="Police"]');
+	assert(!Array.from(docxFont.options).some(option => option.value === BookUI.fontFamily("library:EBGaramond-Bold.otf")), "DOCX masque également les variantes dans le menu");
+	docxFont.value = defaultPdfFamily; docxFont.dispatchEvent(new Event("change"));
+	docxInspector.querySelector('[aria-label="Gras"]').click(); docxInspector.querySelector('[aria-label="Italique"]').click();
+	const docxSample = docxInspector.querySelector("iframe").contentDocument.querySelector("p");
+	assert(otherEditors[1].presentation.style["font-family"] === defaultPdfFamily && docxSample.ownerDocument.defaultView.getComputedStyle(docxSample).fontWeight === "700" && docxSample.ownerDocument.defaultView.getComputedStyle(docxSample).fontStyle === "italic" && otherEditors[1].presentation.fonts.length === 4, "DOCX partage la famille, ses quatre fichiers et la sélection par gras/italique");
 	tabs[3].click();
 	assert(panels.filter(panel => !panel.hidden).length === 1 && getComputedStyle(panels[0]).display === "none", "Un seul panneau doit être visible");
 	let fieldScope = epubPanel;
@@ -249,13 +504,16 @@ const check = async assets => {
 	BookUI.setTranslations("fr", { bodyFontWarning: "Avertissement personnalisé" }); editor.refresh();
 	assert(container.querySelector(".bookbinder-font-warning").textContent === "Avertissement personnalisé", "Le texte de l’avertissement vient du catalogue éditable");
 	BookUI.setTranslations("fr", {}); editor.refresh();
-	const invalidSize = field("Corps (em)"); invalidSize.value = "0";
+	const invalidSize = field("Corps (em)"); invalidSize.value = "0"; invalidSize.dispatchEvent(new Event("input"));
 	container.querySelectorAll('.bookbinder-inspector-tabs [role="tab"]')[1].click();
 	assert(!invalidSize.getClientRects().length, "Le champ invalide doit être dans une catégorie masquée");
 	editor.revealField(invalidSize);
 	assert(invalidSize.getClientRects().length && !invalidSize.checkValidity(), "La validation révèle le champ sans le recréer ni effacer sa valeur");
-	invalidSize.value = "";
+	invalidSize.value = ""; invalidSize.dispatchEvent(new Event("input"));
 	for (const name of ["Corps (em)", "Interligne (em)", "Marge haute (em)", "Marge basse (em)", "Marge gauche (em)", "Marge droite (em)", "Alinéa (em)"]) assert(field(name).value === "" && field(name).placeholder === "Auto", name + " doit être en Auto");
+	change("Marge haute (em)", "5 mm", "input");
+	assert(field("Marge haute (em)").checkValidity() && String(presentation.style["margin-top"]).endsWith("em") && Math.abs(parseFloat(presentation.style["margin-top"]) * parseFloat(computed("p").fontSize) * .75 - 360 / 25.4) < .00001, "La saisie en millimètres est convertie en em pour ePub");
+	change("Marge haute (em)", "", "input");
 	const styleChoices = new Set(Array.from(field("Style").options, option => option.value));
 	assert(styleChoices.has(".bookbinder-colophon p"), "Le style Colophon doit être disponible dans la liste des styles");
 	const styleLabels = Array.from(field("Style").options, option => option.text);
@@ -267,7 +525,8 @@ const check = async assets => {
 	change("Style", "h1.title"); change("Corps (em)", "2.5", "input");
 	change("Position du titre", "one-third");
 	assert(presentation.styles["h1.title"]["font-size"] === "2.5em" && computed("h1.title").fontSize === "40px" && computed("h1:not(.title)").fontSize === "48px", "Le titre de la page de garde a son propre style");
-	assert(Math.abs(parseFloat(computed("h1.title").paddingTop) - frame.contentWindow.innerHeight / 3) < 0.1, "Le titre du livre peut aussi descendre à un tiers de page");
+	assert(field("Espace avant le titre (mm)").value === "50" && field("Position du titre").selectedOptions[0].textContent === "Espacement en haut de page", "L’espacement EPUB se règle en hauteur fixe");
+	assert(Math.abs(parseFloat(computed("h1.title").paddingTop) - 50 * 96 / 25.4) < 0.1, "Le titre du livre utilise 50 mm par défaut, indépendamment de sa taille");
 	change("Style", ".bookbinder-colophon p");
 	assert(field("Corps (em)").value === "" && field("Police").value === "", "Le style Colophon commence en Auto");
 	change("Corps (em)", "0.9", "input"); field("Italique").click(); field("Aligner : Droite").click();
@@ -328,8 +587,28 @@ const check = async assets => {
 	assert(field("Position du titre").value === "", "Les titres restent en position Auto par défaut");
 	change("Marge haute (em)", "2", "input"); change("Saut de page avant", "auto");
 	change("Position du titre", "one-third");
-	assert(presentation.headings.h2["page-position"] === "one-third" && field("Saut de page avant").disabled && field("Saut de page avant").value === "always" && field("Marge haute (em)").disabled, "La position à un tiers démarre une nouvelle page et suspend la marge haute");
-	assert(Math.abs(parseFloat(computed("h2").paddingTop) - frame.contentWindow.innerHeight / 3) < 0.1 && computed("h2").marginTop === "0px", "Le titre descend selon la hauteur disponible, sans marge haute supplémentaire");
+	assert(presentation.headings.h2["page-position"] === "one-third" && field("Saut de page avant").disabled && field("Saut de page avant").value === "always" && field("Espace avant le titre (mm)").value === "50", "Le démarrage avec espacement impose une nouvelle page à hauteur fixe");
+	const previousHeadingBreak = presentation.headings.h2["page-break-before"];
+	presentation.headings.h2["page-break-before"] = "left"; editor.refresh();
+	assert(field("Saut de page avant").value === "always" && field("Saut de page avant").disabled, "En EPUB, le tiers de page conserve son saut imposé malgré une ancienne valeur de parité");
+	presentation.headings.h2["page-break-before"] = previousHeadingBreak; editor.refresh();
+	assert(Math.abs(parseFloat(computed("h2").paddingTop) - 50 * 96 / 25.4) < 0.1 && computed("h2").marginTop === "0px", "Le décalage est conservé au début d’une page, sans marge haute supplémentaire");
+	change("Espace avant le titre (mm)", "40", "input");
+	assert(presentation.headings.h2["page-offset"] === "40mm" && presentation.headings.h2["margin-top"] === "2em", "L’espacement fixe se règle sans modifier la marge normale");
+	change("Espace avant le titre (mm)", "-1", "input");
+	assert(!field("Espace avant le titre (mm)").checkValidity() && presentation.headings.h2["page-offset"] === "40mm", "Un espacement négatif ne remplace pas la dernière valeur valide");
+	change("Espace avant le titre (mm)", "", "input"); field("Espace avant le titre (mm)").dispatchEvent(new Event("blur"));
+	assert(field("Espace avant le titre (mm)").value === "50" && presentation.headings.h2["page-offset"] === undefined, "Effacer restaure les 50 mm par défaut");
+	change("Espace avant le titre (mm)", "15em", "input"); field("Espace avant le titre (mm)").dispatchEvent(new Event("blur"));
+	assert(field("Espace avant le titre (mm)").value === "63.5" && presentation.headings.h2["page-offset"] === "63.5mm", "Une saisie en em est convertie une fois en hauteur fixe");
+	change("Espace avant le titre (mm)", "20", "input");
+	const stableHeadingOffset = parseFloat(computed("h2").paddingTop);
+	change("Corps (em)", "3.5", "input");
+	assert(Math.abs(parseFloat(computed("h2").paddingTop) - stableHeadingOffset) < .1, "Agrandir le titre ne modifie pas la hauteur de départ");
+	frame.contentDocument.documentElement.style.fontSize = "28px";
+	assert(Math.abs(parseFloat(computed("h2").paddingTop) - stableHeadingOffset) < .1, "Agrandir la taille de lecture ne modifie pas la hauteur de départ");
+	frame.contentDocument.documentElement.style.removeProperty("font-size");
+	change("Corps (em)", "1.75", "input");
 	change("Position du titre", "");
 	assert(!field("Marge haute (em)").disabled && field("Marge haute (em)").value === "2" && field("Saut de page avant").value === "auto" && parseFloat(computed("h2").paddingTop) === 0, "Auto restaure la marge haute et le saut de page antérieurs");
 	change("Position du titre", "one-third");
@@ -350,9 +629,9 @@ const check = async assets => {
 	change("Police", BookUI.fontFamily(filename));
 	assert(frame.contentDocument.fonts.check('16px "' + BookUI.fontFamily(filename) + '"'), "La police importée doit être chargée");
 	assert(computed("h2").fontFamily.includes(BookUI.fontFamily(filename)), "La police doit être utilisée dans l’aperçu");
-	assert(field("Police").options[0].value === "" && field("Police").options[1].value === BookUI.fontFamily(filename) && field("Police").querySelector(":scope > hr"), "Les polices utilisées remontent immédiatement sous Auto, avant un séparateur HR");
+	assert(field("Police").options[0].value === "" && field("Police").options[1].value === "body" && field("Police").options[2].value === BookUI.fontFamily(filename) && field("Police").querySelector(":scope > hr"), "Les polices utilisées remontent sous Auto et Texte courant, avant un séparateur HR");
 	ruleEditor.refresh();
-	assert(rulesPanel.querySelector('[aria-label="Police"]').options[1].value === BookUI.fontFamily(filename) && rulesPanel.querySelector('select[aria-label="Police"] > hr'), "Le groupe utilisé reflète tous les styles, y compris dans l’éditeur de règles");
+	assert(rulesPanel.querySelector('[aria-label="Police"]').options[2].value === BookUI.fontFamily(filename) && rulesPanel.querySelector('select[aria-label="Police"] > hr'), "Le groupe utilisé reflète tous les styles, y compris dans l’éditeur de règles");
 	change("Police", "");
 	assert(!presentation.headings.h2["font-family"] && !presentation.fonts.length, "Auto retire la dernière déclaration de la police et sa ressource");
 	assert(!field("Police").querySelector("hr"), "Aucun séparateur ne reste quand aucune police n’est utilisée");
@@ -396,20 +675,23 @@ const check = async assets => {
 	}
 	change("Style", "blockquote p"); change("Corps (em)", "1.1", "input"); change("Marge haute (em)", "0.5", "input");
 	assert(Math.abs(parseFloat(computed("blockquote p").fontSize) - 17.6) < 0.1, "Taille du paragraphe de citation en em");
-	change("Style", ".smallcaps"); change("Espacement des caractères (em)", "0.05", "input");
+	change("Style", ".smallcaps");
+	assert(field("Approche").value === "" && !field("Approche").closest("label").dataset.unit, "Approche EPUB en Auto, sans unité affichée");
+	change("Approche", "50", "input");
+	assert(presentation.styles[".smallcaps"]["letter-spacing"] === "0.05em", "L’EPUB conserve une approche relative à la taille des caractères");
 	change("Style", "sub"); change("Corps (em)", "0.75", "input");
 	change("Style", "p.tab"); field("Italique").click(); change("Corps (em)", "1.25", "input"); change("Marge gauche (em)", "2", "input");
 	field("Aligner : Centré").click();
 	assert(computed("p.tab").fontStyle === "italic" && computed("p.tab").textAlign === "center" && parseFloat(computed("p.tab").fontSize) === 20 && parseFloat(computed("p.tab").marginLeft) === 40, "Les réglages Tabulation s’appliquent dans l’aperçu");
 	formatPanels[2].tabs.querySelectorAll("button")[2].click(); fieldScope = rulesPanel;
 	const paragraphStyles = { p: "Texte courant", "blockquote p": "Citation", "section.footnotes p": "Note de bas de page", "p.tab": "Tabulation" };
-	assert(Array.from(field("Style de paragraphe").options).map(option => option.value).join("|") === Object.keys(paragraphStyles).join("|"), "Choix du style de paragraphe avant la règle");
+	assert(Array.from(field("Style").options).map(option => option.value).join("|") === Array.from(styleChoices).join("|"), "Tous les styles du manuscrit sont proposés avant la règle");
 	for (const [style, name] of Object.entries(paragraphStyles)) {
-		change("Style de paragraphe", style);
+		change("Style", style);
 		const choices = Array.from(field("Règle").options);
-		assert(choices.length === 3 && choices[0].value === "" && choices[0].text === "Pas de règle" && choices.slice(1).every(option => option.text.includes(name)) && choices[1].text.startsWith("Premier paragraphe") && choices[2].text.startsWith("Premier caractère"), "Pas de règle ou deux règles nommées pour " + name);
+		assert(choices.length === 4 && choices[0].value === "" && choices[0].text === "Pas de règle" && choices.slice(1).every(option => option.text.includes(name)) && choices[1].text.startsWith("Premier paragraphe") && choices[2].text.startsWith("Premier caractère") && choices[3].text.endsWith("dans le livre"), "Pas de règle ou trois règles nommées pour " + name);
 	}
-	change("Style de paragraphe", "blockquote p");
+	change("Style", "blockquote p");
 	change("Règle", "blockquote .bookbinder-after-heading-quote + p"); change("Corps (em)", "1.25", "input");
 	const rulesFrame = rulesPanel.querySelector("iframe");
 	const quote = rulesFrame.contentDocument.querySelector('.bookbinder-after-heading-quote + p');
@@ -417,7 +699,7 @@ const check = async assets => {
 	assert(parseFloat(rulesFrame.contentWindow.getComputedStyle(quote.nextElementSibling).fontSize) === 17.6, "Les paragraphes Citation suivants gardent leur style");
 	change("Règle", "blockquote .bookbinder-after-heading-quote + p::first-letter"); change("Corps (em)", "2", "input");
 	assert(parseFloat(rulesFrame.contentWindow.getComputedStyle(rulesFrame.contentDocument.querySelector('.bookbinder-after-heading-quote + p'), "::first-letter").fontSize) === 40, "Premier caractère du premier paragraphe Citation");
-	change("Style de paragraphe", "p");
+	change("Style", "p");
 	assert(field("Règle").value === ".bookbinder-after-heading-body + p::first-letter", "Le choix Premier caractère suit le style de paragraphe sélectionné");
 	change("Corps (em)", "2", "input");
 	const initial = rulesFrame.contentDocument.querySelector('[data-book-style=".bookbinder-after-heading-body + p::first-letter"]');
@@ -428,17 +710,17 @@ const check = async assets => {
 	assert(!rulesFrame.contentDocument.querySelector(".bookbinder-after-heading-body"), "Pas de règle désactive aussi les règles du modèle");
 	assert(parseFloat(rulesFrame.contentWindow.getComputedStyle(initial, "::first-letter").fontSize) === 16, "Premier caractère sans formatage conditionnel");
 	assert(!rulesPanel.querySelector('[aria-label="Corps (em)"]'), "Pas de commandes de formatage sans règle");
-	change("Style de paragraphe", "blockquote p");
+	change("Style", "blockquote p");
 	assert(parseFloat(rulesFrame.contentWindow.getComputedStyle(quote, "::first-letter").fontSize) === 40, "Les règles Citation restent actives");
-	change("Style de paragraphe", "p");
+	change("Style", "p");
 	assert(field("Règle").value === "", "Pas de règle conservé en changeant de style");
 	change("Règle", ".bookbinder-after-heading-body + p::first-letter");
 	assert(!presentation.disabledRules.includes("body") && parseFloat(rulesFrame.contentWindow.getComputedStyle(initial, "::first-letter").fontSize) === 32, "Réactiver restaure le formatage saisi");
-	change("Style de paragraphe", "blockquote p"); change("Règle", "");
+	change("Style", "blockquote p"); change("Règle", "");
 	const reopenedContainer = document.createElement("div"); rulesPanel.append(reopenedContainer);
 	const reopened = new BookUI.StyleEditor(reopenedContainer, presentation, assets.baseCss, () => {}, undefined, { sanitizeHTMLToDom: parseSample, createEl: makeEl, format: "epub", rules: true });
 	await reopened.ready;
-	fieldScope = reopenedContainer; change("Style de paragraphe", "blockquote p");
+	fieldScope = reopenedContainer; change("Style", "blockquote p");
 	assert(field("Règle").value === "", "Pas de règle conservé à la réouverture");
 	reopened.dispose(); reopenedContainer.remove();
 	formatPanels[2].tabs.querySelectorAll("button")[1].click(); fieldScope = epubPanel;
@@ -488,7 +770,7 @@ const check = async assets => {
 	dimensionPresentation.headings.h2["margin-top"] = "12pt";
 	dimensionPresentation.headings.h2["page-position"] = "one-third";
 	dimensions.refresh(); dimensions.normalizeUnits();
-	assert(dimensionPresentation.headings.h2["margin-top"] === "12pt", "La sauvegarde conserve une marge inactive avec la position à un tiers");
+	assert(dimensionPresentation.headings.h2["margin-top"] === "12pt", "La marge inactive est conservée pendant le démarrage à hauteur fixe");
 	delete dimensionPresentation.headings.h2["page-position"];
 	dimensions.refresh(); dimensions.normalizeUnits();
 	assert(dimensionPresentation.headings.h2["margin-top"] === "0.5em", "Le retour en Auto retrouve et convertit la marge précédente");
@@ -529,9 +811,14 @@ const check = async assets => {
 	await fontSelection;
 	const fontChoices = Array.from(field("Police").children);
 	const fontDivider = fontChoices.findIndex(option => option.tagName === "HR");
-	assert(fontDivider === 3 && new Set(fontChoices.slice(1, fontDivider).map(option => option.value)).size === 2 && fontChoices.slice(1, fontDivider).every(option => [BookUI.fontFamily(filename), BookUI.fontFamily(packageReference)].includes(option.value)), "Toutes les polices utilisées sont au-dessus du HR, une seule fois chacune");
+	assert(fontDivider === 4 && new Set(fontChoices.slice(2, fontDivider).map(option => option.value)).size === 2 && fontChoices.slice(2, fontDivider).every(option => [BookUI.fontFamily(filename), BookUI.fontFamily(packageReference)].includes(option.value)), "Toutes les polices utilisées sont au-dessus du HR, une seule fois chacune");
 	assert(presentation.headings.h5["font-family"] === BookUI.fontFamily(packageReference) && !presentation.headings.h6["font-family"], "La police est affectée au style choisi même si on change de style pendant son chargement");
 	assert(frame.contentDocument.fonts.check('16px "' + BookUI.fontFamily(packageReference) + '"'), "Une police choisie dans la bibliothèque est chargée dans l’aperçu");
+	const loadedFaces = Array.from(frame.contentDocument.fonts).filter(face => face.family === BookUI.fontFamily(packageReference));
+	assert(loadedFaces.length === 4 && loadedFaces.some(face => face.weight === "700" && face.style === "italic" && face.status === "loaded"), "La famille dispose de ses quatre vrais fichiers dans l’aperçu");
+	change("Style", "h5"); field("Gras").click(); field("Italique").click();
+	assert(presentation.headings.h5["font-family"] === BookUI.fontFamily(packageReference) && computed("h5").fontWeight === "700" && computed("h5").fontStyle === "italic", "Gras et italique utilisent automatiquement la variante de la famille sans changer le menu Police");
+	change("Style", "h6");
 	change("Police", BookUI.fontFamily(packageReference));
 	change("Style", "h5"); change("Police", "");
 	assert(presentation.fonts.includes(packageReference), "Une police reste utilisée tant qu’un autre style la déclare");
@@ -564,17 +851,17 @@ const check = async assets => {
 	assert(englishPresentation.styles["p.tab"]["font-style"] === "italic", "English controls preserve the same style keys");
 	const englishFont = englishContainer.querySelector('[aria-label="Font"]');
 	englishFont.value = "serif"; englishFont.dispatchEvent(new Event("change"));
-	assert(englishFont.options[1].value === "serif" && englishFont.querySelector("hr") && englishFont.value === "serif", "Une famille générique utilisée remonte aussi, en conservant la sélection");
+	assert(englishFont.options[2].value === "serif" && englishFont.querySelector("hr") && englishFont.value === "serif", "Une famille générique utilisée remonte aussi, en conservant la sélection");
 	englishPresentation.headings.h1 = { "font-family": "monospace" }; englishPresentation.headings.h2 = { "font-family": "sans-serif" }; englishEditor.refresh();
 	assert(!englishContainer.querySelector('select[aria-label="Font"] > hr'), "Aucun séparateur vide quand toutes les polices disponibles sont utilisées");
 	const englishRulesContainer = document.createElement("div"); host.append(englishRulesContainer);
 	const englishRules = new BookUI.StyleEditor(englishRulesContainer, englishPresentation, assets.baseCss, () => {}, undefined, { sanitizeHTMLToDom: parseSample, createEl: makeEl, format: "epub", rules: true });
 	await englishRules.ready;
-	const paragraphChoice = englishRulesContainer.querySelector('[aria-label="Paragraph style"]');
-	assert(Array.from(paragraphChoice.options, option => option.text).join("|") === "Body text|Footnote|Quotation|Tabulation", "English paragraph styles sorted by their translated labels");
+	const paragraphChoice = englishRulesContainer.querySelector('[aria-label="Style"]');
+	assert(Array.from(paragraphChoice.options, option => option.text).join("|") === Array.from(englishStyle.options, option => option.text).join("|"), "Every manuscript style follows the translated style order");
 	paragraphChoice.value = "blockquote p"; paragraphChoice.dispatchEvent(new Event("change"));
 	const ruleLabels = Array.from(englishRulesContainer.querySelector('[aria-label="Rule"]').options, option => option.text);
-	assert(ruleLabels.includes("No rule") && ruleLabels.includes("First character of “Quotation” after a heading"), "English contextual rules");
+	assert(ruleLabels.includes("No rule") && ruleLabels.includes("First character of “Quotation” after a heading") && ruleLabels.includes("First “Quotation” in the book"), "English contextual rules");
 	const translatedNote = document.createElement("div"); translatedNote.innerHTML = '<a href="obsidian://bookbinder">Modifier le projet</a><a href="obsidian://bookbinder">Mon lien personnel</a>';
 	BookUI.linkProjectNote(translatedNote, "bookbinder.md", "Vault");
 	assert(translatedNote.querySelector("a").textContent === "Edit project" && translatedNote.querySelectorAll("a")[1].textContent === "Mon lien personnel", "Generated project links translated, personal text preserved");
@@ -592,12 +879,43 @@ const check = async assets => {
 	}
 	englishEditor.dispose(); englishRules.dispose(); englishContainer.remove(); englishRulesContainer.remove(); host.style.width = "800px";
 	BookUI.setLocale("fr");
+	for (const format of ["epub", "pdf", "docx"]) {
+		const followContainer = document.createElement("div"); host.append(followContainer);
+		const follow = { style: { "font-family": "serif", "font-size": format === "epub" ? "1.25em" : "14pt" }, headings: {}, fonts: [] };
+		const followEditor = new BookUI.StyleEditor(followContainer, follow, (format === "epub" ? assets.baseCss : BookUI.pdfBaseCss) + "h3{font-family:monospace}", () => {}, undefined, { sanitizeHTMLToDom: parseSample, createEl: makeEl, format });
+		await followEditor.ready;
+		const followField = label => followContainer.querySelector('[aria-label="' + label + '"]');
+		const followChange = (label, value) => { const input = followField(label); input.value = value; input.dispatchEvent(new Event("change")); };
+		followChange("Style", "h3");
+		assert(followField("Origine du corps").value === "auto", "Auto conserve la taille propre au H3 : " + format);
+		followChange("Police", "body"); followChange("Origine du corps", "body");
+		const preview = followContainer.querySelector("iframe"), view = preview.contentWindow;
+		const follows = () => { const body = view.getComputedStyle(preview.contentDocument.body), heading = view.getComputedStyle(preview.contentDocument.querySelector("h3")); return body.fontSize === heading.fontSize && body.fontFamily === heading.fontFamily; };
+		assert(follows() && followField(format === "epub" ? "Corps (em)" : "Corps (pt)").disabled, "Le H3 reprend exactement la taille et la police du corps : " + format);
+		follow.style["font-size"] = format === "epub" ? "1.5em" : "18pt"; follow.style["font-family"] = "sans-serif"; followEditor.refresh();
+		assert(follows() && followField("Police").value === "body" && followField("Origine du corps").value === "body", "La référence suit les modifications du corps : " + format);
+		followEditor.normalizeUnits();
+		assert(follow.headings.h3["font-size"] === "body" && follow.headings.h3["font-family"] === "body", "La sauvegarde garde les références : " + format);
+		delete follow.style["font-size"]; followEditor.refresh();
+		assert(follows(), "La référence utilise aussi le corps par défaut : " + format);
+		follow.style["margin-top"] = format === "epub" ? "1em" : "6pt"; follow.style["margin-bottom"] = format === "epub" ? "2em" : "9pt"; followEditor.refresh();
+		const paragraphs = preview.contentDocument.querySelectorAll("body > p");
+		assert(parseFloat(view.getComputedStyle(paragraphs[0]).marginTop) > 0 && parseFloat(view.getComputedStyle(paragraphs[1]).marginTop) === 0 && parseFloat(view.getComputedStyle(paragraphs[1]).marginBottom) > 0, "L’aperçu supprime seulement la marge haute des paragraphes consécutifs : " + format);
+		followChange("Origine du corps", "auto"); followChange("Police", "");
+		assert(!follow.headings.h3["font-size"] && !follow.headings.h3["font-family"] && !follows(), "Auto restaure le modèle du H3 : " + format);
+		followChange("Style", "p");
+		assert(!followField("Origine du corps") && !Array.from(followField("Police").options).some(option => option.value === "body"), "Le texte courant ne peut pas se référencer lui-même : " + format);
+		followEditor.dispose(); followContainer.remove();
+	}
 	const cover = await BookUI.renderCover({ title: "Projet visuel", author: "Auteur", subtitle: "", footer: "Épreuve" }, makeEl);
 	let coverBinary = ""; for (const byte of cover) coverBinary += String.fromCharCode(byte);
 	return { presentation, filename: filenameData.filename, pdf: otherEditors[0].presentation, docx: otherEditors[1].presentation, cover: btoa(coverBinary), changed };
 };
 const fontCatalog = JSON.parse(await readFile(path.join(root, "fonts/catalog.json"), "utf8"));
-const packageFonts = await Promise.all(fontCatalog.files.filter(entry => entry.kind === "font").map(async entry => ({ path: entry.path, data: (await readFile(path.join(root, "fonts", entry.path))).toString("base64") })));
+const packageFonts = await Promise.all(fontCatalog.files.filter(entry => entry.kind === "font").map(async entry => {
+	const bytes = await readFile(path.join(root, "fonts", entry.path));
+	return { path: entry.path, data: bytes.toString("base64"), face: detectFontFace(bytes) };
+}));
 const expression = browser.outputFiles[0].text + "\n(" + check.toString() + ")(" + JSON.stringify({ styles, baseCss: resources["epub/base.css"], font: Buffer.from(font.data).toString("base64"), fontName: font.name, packageFonts }) + ")";
 const result = await evaluateInChrome(expression, directory, path.join(directory, "style-editor.png"));
 assert.ok(result.changed > 5);
@@ -607,7 +925,9 @@ assert.equal(await saveLibraryFont(fontDirectory, font), "library:" + font.name)
 assert.deepEqual(await listFontLibrary(fontDirectory), ["library:" + font.name]);
 const packageFont = packageFonts.find(font => font.path === "FiraSans-Regular.otf");
 const packageFontName = path.basename(packageFont.path);
-await saveLibraryFont(fontDirectory, { name: packageFontName, data: Buffer.from(packageFont.data, "base64") });
+for (const face of packageFonts.filter(face => face.path.startsWith("FiraSans-"))) await saveLibraryFont(fontDirectory, { name: path.basename(face.path), data: Buffer.from(face.data, "base64") });
+const unusedFont = packageFonts.find(face => face.path === "NotoSerif-Regular.otf");
+await saveLibraryFont(fontDirectory, { name: unusedFont.path, data: Buffer.from(unusedFont.data, "base64") });
 await writeFile(path.join(projectDirectory, "cover.jpg"), Buffer.from(result.cover, "base64"));
 const { disabledRules, ...epub } = result.presentation;
 const data = { title: "Projet visuel", author: "Auteur", filename: result.filename, colophon: "COL_UI *Composition personnelle*.", cover: "cover.jpg", epub: { ...epub, "disabled-rules": disabledRules }, pdf: result.pdf, docx: result.docx, custom: { preserved: true } };
@@ -623,8 +943,9 @@ assert.equal(saved.epub.styles["h1.title"]["font-size"], "2.5em");
 assert.deepEqual(saved.epub.styles[".bookbinder-colophon p"], { "font-size": "0.9em", "font-style": "italic", "text-align": "right", "margin-left": "0.5em", "text-indent": "0.75em" });
 assert.equal(saved.epub.headings.h2["font-family"], fontFamily(font.name));
 assert.equal(saved.epub.headings.h2["page-position"], "one-third");
+assert.equal(saved.epub.headings.h2["page-offset"], "20mm");
 assert.equal(saved.custom.preserved, true);
-assert.deepEqual(saved.epub.fonts, ["library:" + font.name, "library:" + packageFontName]);
+assert.deepEqual(saved.epub.fonts, ["library:" + font.name, "library:FiraSans-Regular.otf", "library:FiraSans-Bold.otf", "library:FiraSans-Italic.otf", "library:FiraSans-BoldItalic.otf"]);
 assert.equal(saved.epub.headings.h5["font-family"], fontFamily(packageFontName));
 assert.equal(saved.epub.separator, "⁂ · ⁂");
 for (const property of ["font-size", "font-family", "color", "line-height"]) assert.equal(saved.epub.style[property], undefined, property + " reste en Auto après sauvegarde");
@@ -648,9 +969,10 @@ const embeddedFont = entries.find(name => name.endsWith(font.name)); assert.ok(e
 assert.deepEqual((await exec("/usr/bin/unzip", ["-p", output, embeddedFont], { encoding: "buffer" })).stdout, Buffer.from(font.data));
 const embeddedPackageFont = entries.find(name => name.endsWith("/" + packageFontName)); assert.ok(embeddedPackageFont);
 assert.deepEqual((await exec("/usr/bin/unzip", ["-p", output, embeddedPackageFont], { encoding: "buffer" })).stdout, Buffer.from(packageFont.data, "base64"));
-assert.equal(entries.filter(name => /\/fonts\/[^/]+\.(otf|ttf)$/.test(name)).length, 2, "L’EPUB embarque uniquement les polices du projet, pas toute la bibliothèque");
+assert.deepEqual(entries.filter(name => /\/fonts\/[^/]+\.(otf|ttf)$/.test(name)).map(name => path.basename(name)).sort(), [font.name, "FiraSans-Regular.otf", "FiraSans-Bold.otf", "FiraSans-Italic.otf", "FiraSans-BoldItalic.otf"].sort(), "L’EPUB embarque les familles utilisées avec leurs vraies variantes, en excluant les familles inutilisées");
 let css = "";
 for (const name of entries.filter(name => name.endsWith(".css"))) css += (await exec("/usr/bin/unzip", ["-p", output, name])).stdout;
+assert.match(css, new RegExp(`font-family:"${fontFamily(packageFontName)}";font-weight:700;font-style:italic;src:url\\("[^"\\n]*FiraSans-BoldItalic\\.otf`), "La CSS lie le gras italique au fichier réel de la même famille");
 let separatorHtml = "";
 for (const name of entries.filter(name => name.endsWith(".xhtml"))) separatorHtml += (await exec("/usr/bin/unzip", ["-p", output, name])).stdout;
 assert.match(separatorHtml, /<div class="bookbinder-separator">\s*⁂ · ⁂\s*<\/div>/);
@@ -660,13 +982,13 @@ assert.doesNotMatch(css, /(?:^|})\s*(?:body|p)\s*\{[^}]*(?:font-family|font-size
 assert.ok(css.includes(fontFamily(font.name)));
 assert.ok(!css.includes("library:"), "Le EPUB utilise des chemins internes pour les polices de la bibliothèque");
 assert.match(css, /font-size:1.75em/);
-assert.match(css, /h2\{[^}]*page-break-before:always;break-before:page;margin-top:0;padding-top:33\.3333vh/);
-assert.doesNotMatch(css, /page-position/);
+assert.match(css, /h2\{[^}]*page-break-before:always;break-before:page;margin-top:0;padding-top:20mm/);
+assert.doesNotMatch(css, /page-position|page-offset|\dvh\b/);
 const titlePageName = entries.find(name => name.endsWith("/title_page.xhtml"));
 assert.ok(titlePageName, "La page de garde est présente dans l’ePub");
 const titlePageHtml = (await exec("/usr/bin/unzip", ["-p", output, titlePageName])).stdout;
 assert.match(titlePageHtml, /<h1 class="title">Projet visuel<\/h1>/);
-assert.match(css, /body h1\.title\{font-size:2.5em;[^}]*padding-top:33\.3333vh/);
+assert.match(css, /body h1\.title\{font-size:2.5em;[^}]*padding-top:50mm/);
 assert.match(separatorHtml, /COL_UI <em>Composition personnelle<\/em>/);
 assert.match(separatorHtml, /Généré par <a href="https:\/\/community\.obsidian\.md\/plugins\/bookbinder">Bookbinder<\/a>/);
 assert.match(css, /text-align:right/);

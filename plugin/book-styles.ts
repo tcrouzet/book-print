@@ -8,6 +8,9 @@ export interface BookStyle {
 	pseudo?: string;
 	paragraph?: string;
 	kind?: string;
+	marker?: string;
+	wrapper?: "span" | "div" | "contents" | "before";
+	scope?: "book";
 }
 
 export const bookStyles: BookStyle[] = [
@@ -37,8 +40,12 @@ export const bookStyles: BookStyle[] = [
 	{ selector: "img", get label() { return t("image"); }, get sample() { return t("previewImage"); } },
 ];
 
-export function sortedBookStyles(): BookStyle[] {
-	return [...bookStyles.slice(0, 8), ...bookStyles.slice(8).sort((left, right) => left.label.localeCompare(right.label, getLocale()))];
+export const folioStyle: BookStyle = { selector: ".bookbinder-folio", get label() { return t("folio"); }, sample: '<p class="bookbinder-folio">123</p>' };
+export const printBookStyles = [...bookStyles, folioStyle];
+
+export function sortedBookStyles(format = "epub"): BookStyle[] {
+	const styles = format === "epub" ? bookStyles : printBookStyles;
+	return [...styles.slice(0, 8), ...styles.slice(8).sort((left, right) => left.label.localeCompare(right.label, getLocale()))];
 }
 
 const ruleParagraphs = [
@@ -48,7 +55,7 @@ const ruleParagraphs = [
 	{ paragraph: "p.tab", kind: "tab", get sample() { return t("previewTabrule"); } },
 ];
 
-export const contextRules: BookStyle[] = ruleParagraphs.flatMap(style => {
+const paragraphRules: BookStyle[] = ruleParagraphs.flatMap(style => {
 	const { paragraph, kind } = style;
 	const target = ".bookbinder-after-heading-" + kind + " + p";
 	const selector = paragraph === "blockquote p" ? "blockquote " + target : paragraph === "section.footnotes p" ? "section.footnotes " + target : paragraph === "p.tab" ? target + ".tab" : target;
@@ -57,3 +64,39 @@ export const contextRules: BookStyle[] = ruleParagraphs.flatMap(style => {
 		{ selector: selector + "::first-letter", paragraph, kind, get label() { return t("firstCharacterOfStyleAfterAHeading", { style: bookStyles.find(item => item.selector === paragraph)!.label }); }, get sample() { return style.sample; }, target, pseudo: "::first-letter" },
 	];
 });
+
+const ruleKinds: Record<string, string> = { "h1.title": "title", ".bookbinder-colophon p": "colophon", ".smallcaps": "smallcaps" };
+const inlineWrappers = new Set(["em", "strong", "del", ".smallcaps", "sub", "sup"]);
+const contentWrappers = new Set(["li", "th", "td"]);
+const headingRules: BookStyle[] = [...paragraphRules, ...bookStyles.filter(style => !ruleParagraphs.some(rule => rule.paragraph === style.selector)).flatMap(style => {
+	const kind = ruleKinds[style.selector] ?? style.selector, marker = "bookbinder-rule-" + kind;
+	const wrapper = inlineWrappers.has(style.selector) ? "span" : contentWrappers.has(style.selector) ? "contents" : ["ul", "ol", "hr", ".bookbinder-colophon p"].includes(style.selector) ? "div" : undefined;
+	const target = style.target ?? style.selector;
+	const selector = "." + marker + (wrapper === "span" ? " > " + style.selector : wrapper === "div" && style.selector === ".bookbinder-colophon p" ? " > p" : "");
+	const rule: BookStyle = { selector, paragraph: style.selector, kind, marker, wrapper,
+		get label() { return t("firstStyleAfterAHeading", { style: style.label }); },
+		get sample() { return style.sample ?? `<${style.selector}>${style.label}</${style.selector}>`; }, target };
+	return /^h[1-6]$/.test(style.selector) || style.selector === ".bookbinder-colophon p"
+		? [rule, { ...rule, selector: selector + "::first-letter", pseudo: "::first-letter", get sample() { return rule.sample; }, get label() { return t("firstCharacterOfStyleAfterAHeading", { style: style.label }); } }]
+		: [rule];
+})];
+
+export const contextRules: BookStyle[] = [...headingRules, ...headingRules.filter(rule => !rule.pseudo).map((rule): BookStyle => {
+	const marker = "bookbinder-first-" + rule.kind;
+	return { ...rule, scope: "book", marker, wrapper: rule.marker ? rule.wrapper : "before",
+		selector: rule.selector.replace(rule.marker ?? "bookbinder-after-heading-" + rule.kind, marker),
+		get label() { return t("firstStyleInBook", { style: bookStyles.find(style => style.selector === rule.paragraph)!.label }); },
+		get sample() { return rule.sample; },
+	};
+})];
+
+export function ruleOverrides(project: { rules?: Record<string, Record<string, string | number>> }, rule: BookStyle): Record<string, string | number> {
+	const parent = rule.scope === "book" ? headingRules.find(item => item.paragraph === rule.paragraph && !item.pseudo) : undefined;
+	return { ...(parent ? project.rules?.[parent.selector] : {}), ...project.rules?.[rule.selector] };
+}
+
+export const ruleDefinitions = contextRules.filter(rule => !rule.pseudo).map(rule => ({ kind: rule.kind!, selector: rule.selector, paragraph: rule.paragraph!, marker: rule.marker, wrapper: rule.wrapper, scope: rule.scope }));
+
+export function activeRuleDefinitions(project: { rules: Record<string, Record<string, string | number>> }): typeof ruleDefinitions {
+	return ruleDefinitions.filter(rule => !rule.marker || [rule.selector, rule.selector + "::first-letter"].some(selector => Object.keys(project.rules[selector] ?? {}).length));
+}

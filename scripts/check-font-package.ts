@@ -7,13 +7,16 @@ import { brotliCompressSync, deflateSync, gzipSync } from "node:zlib";
 import { fontCatalog, fontLabel, fontTypeLabel, fontTypes } from "../plugin/font-catalog.ts";
 import { decodeFontPackage, installFontPackage, isFontPackageInstalled, readFontPackage } from "../plugin/font-package.ts";
 import { listFontLibrary } from "../plugin/font-library.ts";
-import { detectFontType } from "../plugin/font-metadata.ts";
+import { detectFontFace, detectFontType, fontEmbeddingAllowed } from "../plugin/font-metadata.ts";
 import { setLocale } from "../plugin/i18n.ts";
 
 setLocale("en");
 const fonts = new URL("../fonts/", import.meta.url);
 const archive = await readFile(new URL(fontCatalog.archive.file, fonts));
 const files = decodeFontPackage(archive);
+for (const [suffix, weight, style] of [["Regular", 400, "normal"], ["Bold", 700, "normal"], ["Italic", 400, "italic"], ["BoldItalic", 700, "italic"]] as const) {
+	assert.deepEqual(detectFontFace(files.get(`EBGaramond-${suffix}.otf`)!), { family: "EB Garamond", weight, style }, "The face comes from the font header, independently of its filename");
+}
 assert.equal(detectFontType(files.get("FiraSans-Regular.otf")!), "sans-serif", "Import detects the font type from its contents without a filename");
 const serifFont = files.get("NotoSerif-Regular.otf")!;
 assert.equal(detectFontType(serifFont), "serif");
@@ -23,6 +26,11 @@ while (serifFont.toString("ascii", metricsEntry, metricsEntry + 4) !== "OS/2") m
 const metricsOffset = serifFont.readUInt32BE(metricsEntry + 8);
 const metricsLength = serifFont.readUInt32BE(metricsEntry + 12);
 const metrics = serifFont.subarray(metricsOffset, metricsOffset + metricsLength);
+for (const [flags, allowed] of [[0, true], [8, true], [0x100, true], [2, false], [4, false], [0x200, false], [0x208, false]] as const) {
+	const font = Buffer.from(serifFont); font.writeUInt16BE(flags, metricsOffset + 8);
+	assert.equal(fontEmbeddingAllowed(font), allowed, "Word embedding respects the font header permissions");
+}
+assert.equal(fontEmbeddingAllowed(Buffer.alloc(0)), false);
 for (const [family, panose, serif, expected] of [
 	[0, 5, 0, "symbol"], [12, 0, 0, "symbol"], [8, 0, 0, "sans-serif"], [7, 0, 0, "serif"],
 	[0, 2, 10, "serif"], [0, 2, 11, "sans-serif"], [0, 2, 15, "sans-serif"],
@@ -46,6 +54,24 @@ function base128(value: number): number[] {
 	while ((value = Math.floor(value / 128))) bytes.unshift((value & 127) | 128);
 	return bytes;
 }
+const nameEntry = Array.from({ length: serifFont.readUInt16BE(4) }, (_, index) => 12 + index * 16).find(offset => serifFont.toString("ascii", offset, offset + 4) === "name")!;
+const nameTable = serifFont.subarray(serifFont.readUInt32BE(nameEntry + 8), serifFont.readUInt32BE(nameEntry + 8) + serifFont.readUInt32BE(nameEntry + 12));
+const compressedTables = [nameTable, metrics].map(table => deflateSync(table));
+const woffHeader = Buffer.alloc(84); woffHeader.write("wOFF"); woffHeader.writeUInt32BE(0x10000, 4); woffHeader.writeUInt16BE(2, 12);
+let tableOffset = woffHeader.length;
+for (const [index, table] of compressedTables.entries()) {
+	const entry = 44 + index * 20;
+	woffHeader.write(index === 0 ? "name" : "OS/2", entry); woffHeader.writeUInt32BE(tableOffset, entry + 4);
+	woffHeader.writeUInt32BE(table.length, entry + 8); woffHeader.writeUInt32BE(index === 0 ? nameTable.length : metrics.length, entry + 12);
+	tableOffset += table.length;
+}
+woffHeader.writeUInt32BE(tableOffset, 8);
+assert.deepEqual(detectFontFace(Buffer.concat([woffHeader, ...compressedTables])), detectFontFace(serifFont), "Compressed WOFF retains family, weight and italic information");
+const nameDirectory = Buffer.from([5, ...base128(nameTable.length), 6, ...base128(metrics.length)]);
+const nameStream = brotliCompressSync(Buffer.concat([nameTable, metrics]));
+const nameHeader = Buffer.alloc(48); nameHeader.write("wOF2"); nameHeader.writeUInt32BE(0x10000, 4); nameHeader.writeUInt16BE(2, 12);
+nameHeader.writeUInt32BE(48 + nameDirectory.length + nameStream.length, 8); nameHeader.writeUInt32BE(nameStream.length, 20);
+assert.deepEqual(detectFontFace(Buffer.concat([nameHeader, nameDirectory, nameStream])), detectFontFace(serifFont), "WOFF2 retains family, weight and italic information");
 const webFonts: Buffer[] = [];
 for (const customTag of [false, true]) {
 	// A transformed outline table precedes OS/2, so its stored length determines the offset.
@@ -57,7 +83,10 @@ for (const customTag of [false, true]) {
 	assert.equal(detectFontType(font), "serif", "WOFF2 metadata survives transformed tables and explicit tags");
 }
 for (const font of [serifFont, ...webFonts]) {
-	for (let length = 0; length < Math.min(font.length, 96); length++) assert.equal(detectFontType(font.subarray(0, length)), undefined, "Truncated metadata cannot be classified");
+	for (let length = 0; length < Math.min(font.length, 96); length++) {
+		assert.equal(detectFontType(font.subarray(0, length)), undefined, "Truncated metadata cannot be classified");
+		assert.equal(detectFontFace(font.subarray(0, length)), undefined, "Truncated face metadata cannot be classified");
+	}
 }
 const outside = Buffer.from(serifFont); outside.writeUInt32BE(0xffffffff, metricsEntry + 8);
 assert.equal(detectFontType(outside), undefined, "Out-of-bounds table offsets are rejected");
@@ -69,6 +98,7 @@ for (let index = 0; index < 500; index++) {
 		font[seed % font.length] ^= seed >>> 24;
 	}
 	assert.ok([undefined, "serif", "sans-serif", "symbol"].includes(detectFontType(font)), "Malformed compressed metadata never escapes the detector");
+	assert.equal(detectFontFace(font), undefined, "Malformed containers without a name table cannot create a family");
 }
 assert.equal(fontCatalog.families.length, 22);
 assert.equal(fontCatalog.files.filter(entry => entry.kind === "font").length, 84);
