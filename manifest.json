@@ -1,7 +1,7 @@
 {
   "id": "bookbinder",
   "name": "Bookbinder",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "minAppVersion": "1.14.0",
   "description": "Convert folders and files into PDF, docx and ePub ready to print or share.",
   "author": "Thierry Crouzet",
