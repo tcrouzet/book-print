@@ -18,9 +18,9 @@ function record(value: unknown): Record<string, unknown> {
 	return value && typeof value === "object" && !Array.isArray(value) ? { ...value as Record<string, unknown> } : {};
 }
 
-export async function openProjectEditor(app: App, directory: string, baseCss: string, fontDirectory: string): Promise<void> {
+export async function openProjectEditor(app: App, directory: string, baseCss: string, fontDirectory: string, defaults?: () => Promise<Record<string, unknown>>): Promise<void> {
 	const original = await readProjectFile(directory);
-	const data: unknown = original === undefined ? {} : parseYaml(original.yaml);
+	const data: unknown = original === undefined ? await defaults?.() ?? {} : parseYaml(original.yaml);
 	const project = parseProject(data, path.basename(directory));
 	new ProjectModal(app, directory, baseCss, original, record(data), project, fontDirectory).open();
 }
@@ -211,7 +211,7 @@ class ProjectModal extends Modal {
 	}
 
 	private metadata(container: HTMLElement, key: string, label: string, multiline = false, required = false): void {
-		const value = this.project.metadata[key];
+		const value = this.data[key] ?? this.project.metadata[key];
 		const text = Array.isArray(value) ? value.join(key === "author" ? "\n" : ", ") : value instanceof Date ? value.toISOString().slice(0, 10) : typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? String(value) : "";
 		const setting = new Setting(container).setName(label);
 		if (key === "lang") {

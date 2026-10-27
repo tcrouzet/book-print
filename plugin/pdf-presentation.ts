@@ -36,7 +36,7 @@ function points(value: string | number, base: number, field: string): number {
 	return Number(result.toFixed(5));
 }
 
-export interface LatexStyle { before: string; after: string; inline: string; hidden: boolean; folio?: boolean; overrides?: Values; continuedBefore?: string; marginTop?: number }
+export interface LatexStyle { before: string; after: string; inline: string; characters: Values; hidden: boolean; folio?: boolean; overrides?: Values; continuedBefore?: string; marginTop?: number }
 
 export function resolvePrintBodyText(project: Presentation, values: Values): Values {
 	return resolveBodyText(values, { "font-family": project.style["font-family"] ?? bodyDefaults["font-family"], "font-size": points(project.style["font-size"] ?? bodyDefaults["font-size"], 11, "font-size") + "pt" });
@@ -58,6 +58,8 @@ export function pdfStyleValues(project: Presentation, selector: string, rules = 
 		"font-family": ["code", "pre"].includes(selector) ? "monospace" : project.style["font-family"] ?? bodyDefaults["font-family"],
 		"font-weight": selector === "strong" ? "bold" : inline ? project.style["font-weight"] ?? "normal" : "normal",
 		"font-style": selector === "em" ? project.style["font-style"] === "italic" ? "normal" : "italic" : inline ? project.style["font-style"] ?? "normal" : "normal",
+		"vertical-align": selector === "sub" ? "sub" : selector === "sup" ? "super" : "baseline",
+		"font-variant": selector === ".smallcaps" ? "small-caps" : project.style["font-variant"] ?? "normal", "text-transform": project.style["text-transform"] ?? "none",
 		color: project.style.color ?? bodyDefaults.color, "text-align": ["code", "pre"].includes(selector) ? "left" : "justify",
 		"text-indent": base * 1.2 + "pt", "margin-top": "0pt", "margin-bottom": "0pt", "margin-left": "0pt", "margin-right": "0pt", "letter-spacing": "0pt",
 		display: "block", "page-break-before": "auto", "page-position": "", hyphens: project.style.hyphens ?? "auto",
@@ -107,6 +109,8 @@ export function pdfPresentation(project: BookProject, fonts: readonly string[]):
 			else throw new Error(t("invalidPdfStyle", { field: "color" }));
 		}
 		if (values["letter-spacing"] !== undefined) inline += `\\addfontfeatures{LetterSpace=${points(values["letter-spacing"], size, "letter-spacing") / size * 100}}\n`;
+		if (values["font-variant"] !== undefined) inline += `\\addfontfeatures{RawFeature=${values["font-variant"] === "small-caps" ? "+smcp" : "-smcp"}}\n`;
+		const characters = Object.fromEntries(Object.entries(values).filter(([name]) => ["vertical-align", "text-transform"].includes(name)));
 		let before = "", after = "";
 		if (values["page-break-before"] === "left") before += "\\BookbinderEvenPage\n";
 		else if (values["page-break-before"] === "right") before += "\\BookbinderOddPage\n";
@@ -130,7 +134,7 @@ export function pdfPresentation(project: BookProject, fonts: readonly string[]):
 		after += "\\par\n";
 		if (values["margin-bottom"] !== undefined) after += `\\vspace*{${points(values["margin-bottom"], size, "margin-bottom")}pt}\n`;
 		after += "\\endgroup\n";
-		return { before, after, inline, hidden: values.display === "none", folio: values.folio !== "hide", continuedBefore, marginTop: values["margin-top"] === undefined ? undefined : points(values["margin-top"], size, "margin-top") };
+		return { before, after, inline, characters, hidden: values.display === "none", folio: values.folio !== "hide", continuedBefore, marginTop: values["margin-top"] === undefined ? undefined : points(values["margin-top"], size, "margin-top") };
 	};
 	const definitions = pdfStyleDefinitions(project);
 	const colophonValues = definitions[".bookbinder-colophon p"];
@@ -158,7 +162,7 @@ export function pdfPresentation(project: BookProject, fonts: readonly string[]):
 	const bookTitleRule = contextRules.find(rule => rule.kind === "title" && rule.scope === "book")!;
 	const title = rules[bookTitleRule.selector] ?? rules[titleRule.selector];
 	if (title) styles["h1.title"] = title;
-	const inherited = Object.fromEntries(Object.entries(project.style).filter(([name]) => ["font-family", "font-size", "line-height", "color"].includes(name)));
+	const inherited = Object.fromEntries(Object.entries(project.style).filter(([name]) => ["font-family", "font-size", "line-height", "color", "font-variant"].includes(name)));
 	const body = style({ ...bodyDefaults, ...inherited });
 	let header = "\\usepackage{ragged2e}\n\\usepackage[normalem]{ulem}\n\\newcommand{\\BookbinderBody}{" + body.inline + `\\hyphenpenalty=${project.style.hyphens === "none" ? 10000 : 50}\\relax` + "\\setlength{\\parindent}{1.2em}\\setlength{\\parskip}{0pt}}\n";
 	header += "\\newcommand{\\BookbinderEvenPage}{\\clearpage\\ifodd\\value{page}\\null\\thispagestyle{empty}\\newpage\\fi}\n\\newcommand{\\BookbinderOddPage}{\\clearpage\\ifodd\\value{page}\\else\\null\\thispagestyle{empty}\\newpage\\fi}\n";
@@ -168,7 +172,8 @@ export function pdfPresentation(project: BookProject, fonts: readonly string[]):
 	const footer = (even: boolean) => {
 		if (folio.position === "none" || styles[folioStyle.selector].hidden) return "";
 		const format = style({ ...definitions[folioStyle.selector], "text-align": folioPage(project.page, even).alignment, "page-break-before": "auto", "page-position": "normal" });
-		return "\\BookbinderFolio{\\parbox[b]{\\textwidth}{" + format.before + "\\strut\\thepage" + format.after + "}}";
+		const position = definitions[folioStyle.selector]["vertical-align"];
+		return "\\BookbinderFolio{\\parbox[b]{\\textwidth}{" + format.before + (position === "super" ? "\\textsuperscript{" : position === "sub" ? "\\textsubscript{" : "{") + "\\strut\\thepage}" + format.after + "}}";
 	};
 	header += `\\setlength{\\footskip}{${page.bottom - folio.offset}mm}\n\\makeatletter\n\\def\\ps@plain{\\let\\@oddhead\\@empty\\let\\@evenhead\\@empty\\def\\@oddfoot{${footer(false)}}\\def\\@evenfoot{${footer(true)}}}\n\\makeatother\n`;
 	header += "\\makeatletter\\renewcommand{\\cleardoublepage}{\\if@twoside\\BookbinderOddPage\\else\\clearpage\\fi}\\makeatother\n";

@@ -29,6 +29,14 @@ const config = { title: "TITRELIVRE", author: "AUTEURLIVRE", lang: "fr", colopho
 	rules: { ".bookbinder-after-heading-body + p": { "text-indent": "0pt" }, ".bookbinder-after-heading-body + p::first-letter": { "font-size": "16pt", color: "#aa0000" } },
 } };
 const request = { sources, directory, pandoc: pandoc.path, xelatex: latex.path, resources, fontDirectory: path.join(root, "fonts") };
+const charactersOutput = path.join(directory, "character-formatting.pdf");
+await exportPdf({ ...request, output: charactersOutput, sources: [{ path: path.join(directory, "characters.md"), content: await readFile(path.join(root, "scripts/fixtures/character-formatting.md"), "utf8") }], project: parseProject({ title: "Titre du livre", pdf: { toc: false, headings: { h3: { "text-transform": "uppercase" } }, styles: { "h1.title": { "text-transform": "uppercase" }, em: { "vertical-align": "super" }, strong: { "vertical-align": "sub" }, "blockquote p": { "font-variant": "small-caps" }, ul: { "text-transform": "uppercase" }, table: { "text-transform": "uppercase" } }, rules: { ".bookbinder-after-heading-body + p::first-letter": { "text-transform": "uppercase" } } } }, "Livre", "pdf") });
+const charactersText = (await exec("pdftotext", ["-layout", charactersOutput, "-"])).stdout;
+assert.match(charactersText, /TITRE DU LIVRE/); assert.match(charactersText, /TITRE ACCENTUÉ/); assert.match(charactersText, /Étiquette/);
+assert.match(charactersText, /LISTE MINUSCULE/); assert.match(charactersText, /CELLULE MINUSCULE/);
+const characterBoxes = (await exec("pdftotext", ["-bbox", charactersOutput, "-"])).stdout;
+const characterY = word => Number(characterBoxes.match(new RegExp(`<word[^>]*yMin="([\\d.]+)"[^>]*>${word}</word>`))[1]);
+assert.ok(characterY("Exposant") < characterY("témoin") && characterY("Indice") > characterY("témoin"), "PDF native character positioning raises superscripts and lowers subscripts");
 for (const hyphens of ["auto", "none"]) {
 	const output = path.join(directory, `hyphenation-${hyphens}.pdf`);
 	await exportPdf({ ...request, output, sources: [{ path: path.join(directory, "typography.md"), content: "### TITREPREMIER TITRESECOND TITRETROISIEME\n\n" + "extraordinairement anticonstitutionnellement internationalisation ".repeat(10) }], project: parseProject({ lang: "fr", pdf: { toc: false, page: { "paper-size": "custom", "paper-width": "80mm", "paper-height": "210mm", "margin-top": "10mm", "margin-bottom": "10mm", "margin-left": "10mm", "margin-right": "10mm" }, style: { "line-height": "30pt", hyphens }, headings: { h3: { "font-size": "22pt" } } } }, "Livre", "pdf") });

@@ -11,6 +11,7 @@ import { fontCatalog, mountFontCatalog } from "./font-catalog.ts";
 import { installFontPackage, isFontPackageInstalled, readFontPackage } from "./font-package.ts";
 import { importFonts } from "./font-import.ts";
 import { readFontLibrary } from "./font-library.ts";
+import { downloadModels, listModels, readModel } from "./project-models.ts";
 
 export class BookbinderSettingTab extends PluginSettingTab {
 	private draft: BookbinderSettings;
@@ -26,6 +27,7 @@ export class BookbinderSettingTab extends PluginSettingTab {
 	getSettingDefinitions(): SettingDefinitionItem[] {
 		return [
 			{ type: "group", heading: t("projects"), items: [
+				{ name: t("projectModel"), desc: t("projectModelDescription"), aliases: [t("downloadModels")], render: setting => this.displayModels(setting) },
 				{ name: t("bookProject"), desc: t("projectSettingDescription"), aliases: [t("create"), t("open"), t("styles"), t("fonts")], render: setting => this.displayProject(setting) },
 				{ name: t("cloneAProject"), desc: t("cloneSettingDescription"), aliases: [t("copy"), t("duplicate")], render: setting => this.displayCloneProject(setting) },
 			] },
@@ -42,6 +44,45 @@ export class BookbinderSettingTab extends PluginSettingTab {
 				{ name: t("fontPackage"), desc: t("fontPackageDescription"), aliases: [t("fontPackageCatalog")], render: setting => this.displayFontPackage(setting) },
 			] },
 		];
+	}
+
+	private displayModels(setting: Setting): void {
+		const status = setting.descEl.createDiv({ attr: { role: "status", "aria-live": "polite" } });
+		setting.addDropdown(input => {
+			input.selectEl.setAttribute("aria-label", t("projectModel"));
+			const refresh = async () => {
+				const names = await listModels(this.plugin.modelDirectory);
+				if (!status.isConnected) return;
+				input.selectEl.replaceChildren();
+				input.addOption("", t("noProjectModel"));
+				for (const name of names) input.addOption(name, name.replace(/\.md$/, ""));
+				if (this.plugin.settings.projectModel && !names.includes(this.plugin.settings.projectModel)) input.addOption(this.plugin.settings.projectModel, this.plugin.settings.projectModel);
+				input.setValue(this.plugin.settings.projectModel);
+			};
+			input.setDisabled(true);
+			void refresh().catch(error => status.setText(error instanceof Error ? error.message : String(error))).finally(() => input.setDisabled(false));
+			input.onChange(async value => {
+				input.setDisabled(true); status.empty();
+				try {
+					if (value) await readModel(this.plugin.modelDirectory, value, parseYaml);
+					await this.plugin.saveSettings({ ...this.plugin.settings, projectModel: value });
+					this.draft.projectModel = value;
+				} catch (error) { input.setValue(this.plugin.settings.projectModel); status.setText(error instanceof Error ? error.message : String(error)); }
+				finally { input.setDisabled(false); }
+			});
+			setting.addButton(button => button.setButtonText(t("downloadModels")).onClick(async () => {
+				button.setDisabled(true); input.setDisabled(true); status.setText(t("downloadingModels"));
+				try {
+					await downloadModels(this.plugin.modelDirectory, async url => {
+						let timer: number | undefined;
+						try { return await Promise.race([requestUrl({ url, throw: false }), new Promise<never>((_, reject) => { timer = window.setTimeout(() => reject(new Error(t("modelDownloadTimedOut"))), 15000); })]); }
+						finally { window.clearTimeout(timer); }
+					}, parseYaml);
+					await refresh(); status.setText(t("projectModelsReady"));
+				} catch (error) { status.setText(error instanceof Error ? error.message : String(error)); }
+				finally { button.setDisabled(false); input.setDisabled(false); }
+			}));
+		});
 	}
 
 	private displayFontLibrary(setting: Setting): void {
@@ -160,7 +201,7 @@ export class BookbinderSettingTab extends PluginSettingTab {
 				const source = this.app.workspace.getActiveFile();
 				const initial = adapter.getFullPath(source?.parent?.path ?? "");
 				const directory = await chooseOutputDirectory(initial, t("chooseTheBookProjectFolder"));
-				if (directory) await openProjectEditor(this.app, directory, this.plugin.resources["epub/base.css"], this.plugin.fontDirectory);
+				if (directory) await openProjectEditor(this.app, directory, this.plugin.resources["epub/base.css"], this.plugin.fontDirectory, () => this.plugin.defaultProjectData());
 			} catch (cause) { error.setText(cause instanceof Error ? cause.message : String(cause)); }
 			finally { button.setDisabled(false); }
 		}));

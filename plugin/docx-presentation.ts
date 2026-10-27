@@ -7,7 +7,7 @@ import type { BookProject } from "./project.ts";
 import { t } from "./i18n.ts";
 
 type Values = Record<string, string | number>;
-type WordStyle = { id: string; hidden: boolean; run?: string; paragraph?: string; pageBreak?: string };
+type WordStyle = { id: string; hidden: boolean; run?: string; paragraph?: string; pageBreak?: string; characterFormatting?: boolean };
 export function xml(value: unknown): string { return String(value).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[char]!); }
 
 export function docxPresentation(project: BookProject, lookup: FontInfoLookup): { styles: Record<string, WordStyle>; rules: Record<string, WordStyle>; styleXml: string; section: string; textWidth: number; oddFooter: string; evenFooter: string; double: boolean } {
@@ -25,6 +25,9 @@ export function docxPresentation(project: BookProject, lookup: FontInfoLookup): 
 		if (values["font-size"] !== undefined) output += `<w:sz w:val="${Math.round(size * 2)}"/><w:szCs w:val="${Math.round(size * 2)}"/>`;
 		if (values["font-weight"] !== undefined) output += `<w:b w:val="${values["font-weight"] === "bold" || Number(values["font-weight"]) >= 600 ? 1 : 0}"/>`;
 		if (values["font-style"] !== undefined) output += `<w:i w:val="${values["font-style"] === "italic" ? 1 : 0}"/>`;
+		if (values["text-transform"] !== undefined) output += `<w:caps w:val="${values["text-transform"] === "uppercase" ? 1 : 0}"/>`;
+		if (values["font-variant"] !== undefined) output += `<w:smallCaps w:val="${values["font-variant"] === "small-caps" ? 1 : 0}"/>`;
+		if (values["vertical-align"] !== undefined) output += `<w:vertAlign w:val="${values["vertical-align"] === "super" ? "superscript" : values["vertical-align"] === "sub" ? "subscript" : "baseline"}"/>`;
 		if (values.color !== undefined) {
 			const colors: Record<string, string> = { black: "000000", white: "FFFFFF", red: "FF0000", green: "008000", blue: "0000FF", gray: "808080", transparent: "FFFFFF" };
 			const hex = String(values.color).match(/^#([0-9a-f]{6}|[0-9a-f]{3})$/i)?.[1];
@@ -67,8 +70,9 @@ export function docxPresentation(project: BookProject, lookup: FontInfoLookup): 
 		styles[item.selector] = { id, hidden: values.display === "none" };
 		if (!character) styles[item.selector].pageBreak = String(values["page-break-before"]);
 		const explicit = project.styles[item.selector] ?? {};
-		const inline: Values = { ...(item.selector === "em" ? { "font-style": "italic" } : item.selector === "strong" ? { "font-weight": "bold" } : item.selector === "code" ? { "font-family": "monospace" } : {}), ...explicit };
-		const extra = item.selector === "a" ? '<w:u w:val="single"/>' : item.selector === "del" ? '<w:strike/>' : item.selector === ".smallcaps" ? '<w:smallCaps/>' : item.selector === "sub" || item.selector === "sup" ? `<w:vertAlign w:val="${item.selector === "sub" ? "subscript" : "superscript"}"/>` : "";
+		styles[item.selector].characterFormatting = ["vertical-align", "text-transform", "font-variant"].some(name => explicit[name] !== undefined);
+		const inline: Values = { ...(item.selector === "em" ? { "font-style": "italic" } : item.selector === "strong" ? { "font-weight": "bold" } : item.selector === "code" ? { "font-family": "monospace" } : item.selector === ".smallcaps" ? { "font-variant": "small-caps" } : item.selector === "sub" ? { "vertical-align": "sub" } : item.selector === "sup" ? { "vertical-align": "super" } : {}), ...explicit };
+		const extra = item.selector === "a" ? '<w:u w:val="single"/>' : item.selector === "del" ? '<w:strike/>' : "";
 		const p = character ? "" : (/^h[1-6]$/.test(item.selector) ? "<w:keepNext/>" : "") + paragraph(values, size, lineHeight(item.selector)) + (/^h[1-6]$/.test(item.selector) ? `<w:outlineLvl w:val="${Number(item.selector[1]) - 1}"/>` : "");
 		const runXml = run(character ? inline : values, size) + extra;
 		styles[item.selector].run = character ? runXml : run(explicit, size);

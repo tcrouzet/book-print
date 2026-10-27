@@ -23,6 +23,21 @@ const sources = [
 const request = { sources, directory, pandoc: pandoc.path, resources, fontDirectory: path.join(root, "fonts") };
 const sourceHashes = new Set(await Promise.all((await readdir(request.fontDirectory)).filter(name => /\.(otf|ttf)$/i.test(name)).map(async name => createHash("sha256").update(await readFile(path.join(request.fontDirectory, name))).digest("hex"))));
 const extract = async (file, part) => (await exec("unzip", ["-p", file, part === "[Content_Types].xml" ? "\\[Content_Types\\].xml" : part], { maxBuffer: 16 * 1024 * 1024 })).stdout;
+const charactersOutput = path.join(directory, "character-formatting.docx");
+await exportDocx({ ...request, output: charactersOutput, sources: [{ path: path.join(directory, "characters.md"), content: await readFile(path.join(root, "scripts/fixtures/character-formatting.md"), "utf8") }], project: parseProject({ docx: { toc: false, headings: { h3: { "text-transform": "uppercase" } }, styles: { em: { "vertical-align": "super" }, strong: { "vertical-align": "sub" }, "blockquote p": { "font-variant": "small-caps" }, sup: { "vertical-align": "baseline" }, ".smallcaps": { "font-variant": "normal" }, ul: { "text-transform": "uppercase" }, table: { "text-transform": "uppercase" } } } }, "Livre", "docx") });
+const charactersStyles = await extract(charactersOutput, "word/styles.xml");
+for (const [name, property] of [["heading 3", '<w:caps w:val="1"/>'], ["Emphasis", '<w:vertAlign w:val="superscript"/>'], ["Strong emphasis", '<w:vertAlign w:val="subscript"/>']]) {
+	const style = [...charactersStyles.matchAll(/<w:style\b[^>]*>[^]*?<\/w:style>/g)].find(match => match[0].includes(`<w:name w:val="${name}"/>`));
+	assert.ok(style && style[0].includes(property), "Native Word style exports character formatting: " + name);
+}
+const characterStyles = new Map([...charactersStyles.matchAll(/<w:style\s[^>]*w:styleId="([^"]+)"[^>]*>([^]*?)<\/w:style>/g)].map(match => [match[1], match[2]]));
+const charactersDocument = await extract(charactersOutput, "word/document.xml");
+for (const marker of ["Liste minuscule.", "Cellule minuscule."]) {
+	const paragraph = [...charactersDocument.matchAll(/<w:p[ >][^]*?<\/w:p>/g)].find(match => match[0].includes(marker))[0];
+	let id = paragraph.match(/<w:pStyle w:val="([^"]+)"/)[1], caps;
+	while (id && caps === undefined) { const style = characterStyles.get(id); caps = style.match(/<w:caps w:val="(\d)"/)?.[1]; id = style.match(/<w:basedOn w:val="([^"]+)"/)?.[1]; }
+	assert.equal(caps, "1", "Word list/table text inherits its container's character formatting");
+}
 const typographyOutput = path.join(directory, "heading-leading-hyphenation.docx");
 await exportDocx({ ...request, output: typographyOutput, sources: [{ path: path.join(directory, "typography.md"), content: "### TITRENORMAL\n\nCORPSSANSCESURE\n\n> PREMIERECITATION\n\n> SECONDECITATION" }], project: parseProject({ docx: { toc: false, style: { "line-height": "30pt", hyphens: "none" }, styles: { "blockquote p": { hyphens: "auto" } }, rules: { "blockquote .bookbinder-first-quote + p": { hyphens: "none" } } } }, "Livre", "docx") });
 const typographyStyles = await extract(typographyOutput, "word/styles.xml"), typographyDocument = await extract(typographyOutput, "word/document.xml");

@@ -18,6 +18,7 @@ import { openProjectEditor } from "./project-modal";
 import { confirmOverwrite } from "./dialogs";
 import { loadTranslationFiles } from "./locale-files.ts";
 import { fontCatalog } from "./font-catalog.ts";
+import { readModel } from "./project-models.ts";
 
 export default class BookbinderPlugin extends Plugin {
 	readonly resources = resources;
@@ -30,7 +31,11 @@ export default class BookbinderPlugin extends Plugin {
 		return adapter.getFullPath(this.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.manifest.id}`);
 	}
 	get fontDirectory(): string { return path.join(this.pluginDirectory, "data", "_fonts"); }
+	get modelDirectory(): string { return path.join(this.pluginDirectory, "models"); }
 	get fontPackageFile(): string { return path.join(this.pluginDirectory, "fonts", fontCatalog.archive.file); }
+	async defaultProjectData(): Promise<Record<string, unknown>> {
+		return this.settings.projectModel ? await readModel(this.modelDirectory, this.settings.projectModel, parseYaml) : {};
+	}
 
 	async onload(): Promise<void> {
 		setLocale(getLanguage());
@@ -76,8 +81,8 @@ export default class BookbinderPlugin extends Plugin {
 			const directory = adapter.getFullPath(folder.path);
 			const projectFile = await readProjectFile(directory);
 			let config: unknown;
-			try { config = projectFile === undefined ? undefined : parseYaml(projectFile.yaml); }
-			catch (error) { throw new Error(t("invalidFileError", { file: projectFile?.name ?? "Projet", error: error instanceof Error ? error.message : String(error) })); }
+			try { config = projectFile === undefined ? await this.defaultProjectData() : parseYaml(projectFile.yaml); }
+			catch (error) { throw new Error(t("invalidFileError", { file: projectFile?.name ?? (this.settings.projectModel || "bookbinder.md"), error: error instanceof Error ? error.message : String(error) })); }
 			const name = source instanceof TFile ? source.basename : source.isRoot() ? this.app.vault.getName() : source.name;
 			const project = parseProject(config, name, format);
 			const files: TFile[] = [];

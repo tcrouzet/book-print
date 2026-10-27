@@ -148,6 +148,18 @@ const request = { project, sources, directory, output, pandoc: pandoc.path, reso
 	return generatedCover;
 } };
 await exportEpub(request);
+const charactersOutput = path.join(directory, "character-formatting.epub");
+await exportEpub({ ...request, output: charactersOutput, renderCover: async () => jpeg, sources: [{ path: path.join(directory, "characters.md"), content: await readFile(path.join(root, "scripts/fixtures/character-formatting.md"), "utf8") + "\n\n\tTABULATION\n" }], project: parseProject({ title: "Titre du livre", cover: "cover.jpg", epub: { headings: { h3: { "text-transform": "uppercase" } }, styles: { em: { "vertical-align": "super" }, strong: { "vertical-align": "sub" }, "blockquote p": { "font-variant": "small-caps", "vertical-align": "super" }, "h1.title": { "vertical-align": "super" } } } }, "Livre") });
+const formattingEntries = (await exec("/usr/bin/unzip", ["-Z1", charactersOutput])).stdout.trim().split("\n");
+let formattingCss = "", formattingHtml = "";
+for (const entry of formattingEntries.filter(name => /\.(xhtml|css)$/.test(name))) {
+	const text = (await exec("/usr/bin/unzip", ["-p", charactersOutput, entry])).stdout;
+	if (entry.endsWith(".css")) formattingCss += text;
+	else { const file = path.join(directory, "characters-" + path.basename(entry)); await writeFile(file, text); await exec("/usr/bin/xmllint", ["--noout", "--nonet", file]); formattingHtml += text; }
+}
+assert.match(formattingCss, /h3\{text-transform:uppercase\}/); assert.match(formattingCss, /body em\{vertical-align:super\}/); assert.match(formattingCss, /body strong\{vertical-align:sub\}/); assert.match(formattingCss, /font-variant:small-caps/);
+assert.match(formattingHtml, /<p class="tab"><span class="bookbinder-character">TABULATION<\/span><\/p>/, "EPUB preserves tabulated paragraphs when character positioning is enabled");
+assert.match(formattingHtml, /<blockquote>\s*<div class="bookbinder-after-heading-quote">\s*<\/div>\s*<p><span class="bookbinder-character">Petites capitales accentuées\.<\/span><\/p>/, "EPUB preserves the contextual marker and wraps paragraph content for raised and lowered text");
 await exec("/usr/bin/unzip", ["-t", output]);
 const entries = (await exec("/usr/bin/unzip", ["-Z1", output])).stdout.trim().split("\n");
 const texts = [];

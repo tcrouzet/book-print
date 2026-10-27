@@ -10,6 +10,8 @@ import { setLocale } from "../plugin/i18n.ts";
 import { listFontLibrary, readFontLibrary, resolveFont, saveLibraryFont } from "../plugin/font-library.ts";
 import "./check-font-package.ts";
 
+await import("./check-models.ts");
+
 setLocale("fr");
 
 const root = await mkdtemp(path.join(tmpdir(), "bookbinder-project-"));

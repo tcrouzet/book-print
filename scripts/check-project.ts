@@ -22,6 +22,13 @@ const bodyRule = ".bookbinder-after-heading-body + p";
 const bodyCharacter = bodyRule + "::first-letter";
 
 for (const format of ["epub", "pdf", "docx"] as const) {
+	for (const [property, values] of Object.entries({ "vertical-align": ["baseline", "super", "sub"], "text-transform": ["none", "uppercase"], "font-variant": ["normal", "small-caps"] })) {
+		for (const value of values) {
+			const formatted = parseProject({ [format]: { style: { [property]: value }, rules: { [bodyCharacter]: { [property]: value } } } }, "Characters", format);
+			assert.equal(formatted.style[property], value); assert.equal(formatted.rules[bodyCharacter][property], value);
+		}
+		for (const invalid of ["bad", 1, "super;display:none"]) assert.throws(() => parseProject({ [format]: { style: { [property]: invalid } } }, "Characters", format), new RegExp(property));
+	}
 	for (const property of ["font-family", "font-size"]) assert.throws(() => parseProject({ [format]: { style: { [property]: "body" } } }, "No self reference", format));
 	const project = parseProject({ [format]: { style: { "font-size": format === "epub" ? "1.25em" : "14pt", "font-family": "sans-serif" }, headings: { h3: { "font-size": "body", "font-family": "body" } }, styles: { code: { "font-size": "body", "font-family": "body" } }, rules: { [bodyCharacter]: { "font-size": "body", "font-family": "body" } } } }, "Body reference", format);
 	assert.deepEqual(project.headings.h3, { "font-size": "body", "font-family": "body" }, "References stay editable in the project");

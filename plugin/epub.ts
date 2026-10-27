@@ -87,6 +87,7 @@ export async function exportEpub(request: EpubRequest): Promise<string | undefin
 	const temporary = await mkdtemp(path.join(path.dirname(output), ".bookbinder-"));
 	try {
 		const args = ["--to=epub3", "--standalone", "--fail-if-warnings", `--toc-depth=${project.tocDepth}`, `--split-level=${project.splitLevel}`, "--wrap=none"];
+		if ([project.style, ...Object.values(project.headings), ...Object.values(project.styles), ...Object.values(project.rules)].some(values => values["vertical-align"] !== undefined)) args.push("--metadata=bookbinder-character-position:true");
 		if (project.toc) args.push("--toc");
 		for (const name of ["book-reader.lua", "epub-tab.lua", "epub-thin-space.lua"]) {
 			const key = `lua/${name}`;

@@ -1,4 +1,21 @@
 interface BookbinderMessages {
+	projectModel: string;
+	projectModelMissing: string;
+	projectModelDescription: string;
+	noProjectModel: string;
+	downloadModels: string;
+	downloadingModels: string;
+	projectModelsReady: string;
+	invalidProjectModel: string;
+	invalidModelCatalog: string;
+	modelDownloadFailed: string;
+	modelDownloadTimedOut: string;
+	modelFileConflict: string;
+	capitals: string;
+	formattingState: string;
+	inheritedFormatting: string;
+	enabledFormatting: string;
+	disabledFormatting: string;
 	automaticHyphenation: string;
 	bookbinderTheDocxAssociationWasLeftUnchanged: string;
 	couldNotOpenDocxError: string;

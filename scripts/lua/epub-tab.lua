@@ -10,3 +10,22 @@ function Div(el)
     end)
   end
 end
+
+function Pandoc(document)
+  if not document.meta['bookbinder-character-position'] then return document end
+  document.meta['bookbinder-character-position'] = nil
+  local function wrap(block)
+    if block.content[1] and block.content[1].t == 'RawInline' and block.content[1].text == '<p class="tab">' then
+      local opening, closing = block.content:remove(1), block.content:remove()
+      block.content = {opening, pandoc.Span(block.content, pandoc.Attr('', {'bookbinder-character'})), closing}
+    else block.content = {pandoc.Span(block.content, pandoc.Attr('', {'bookbinder-character'}))} end
+    return block
+  end
+  document = document:walk({Para = wrap, Plain = wrap, Header = wrap})
+  if document.meta.title then
+    local title = document.meta.title
+    if pandoc.utils.type(title) ~= 'Inlines' then title = pandoc.Inlines({pandoc.Str(pandoc.utils.stringify(title))}) end
+    document.meta.title = pandoc.MetaInlines({pandoc.Span(title, pandoc.Attr('', {'bookbinder-character'}))})
+  end
+  return document
+end

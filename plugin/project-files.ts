@@ -25,9 +25,13 @@ export async function readProjectFile(directory: string): Promise<ProjectFile | 
 	let content: string;
 	try { content = await readFile(path.join(directory, "bookbinder.md"), "utf8"); }
 	catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined; throw error; }
+	return { name: "bookbinder.md", content, ...projectFrontmatter(content, "bookbinder.md") };
+}
+
+export function projectFrontmatter(content: string, filename: string): { yaml: string; body: string } {
 	const frontmatter = /^\uFEFF?---[ \t]*\r?\n([\s\S]*?)^---[ \t]*(?:\r?\n|$)/m.exec(content);
-	if (!frontmatter || frontmatter.index !== 0) throw new Error(t("filenameMustStartWithYamlPropertiesBetweenTwoLines", { filename: "bookbinder.md" }));
-	return { name: "bookbinder.md", content, yaml: frontmatter[1], body: content.slice(frontmatter[0].length) };
+	if (!frontmatter || frontmatter.index !== 0) throw new Error(t("filenameMustStartWithYamlPropertiesBetweenTwoLines", { filename }));
+	return { yaml: frontmatter[1], body: content.slice(frontmatter[0].length) };
 }
 
 export async function loadFont(filename: string): Promise<ImportedFont> {

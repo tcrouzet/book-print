@@ -74,7 +74,12 @@ const styleProperties = new Set([
 
 function styles(value: unknown, field: string, heading = false): Record<string, string | number> {
 	const result = { ...object(value, field) };
+	const characterValues: Record<string, string[]> = { "vertical-align": ["baseline", "super", "sub"], "text-transform": ["none", "uppercase"], "font-variant": ["normal", "small-caps"] };
 	for (const [name, setting] of Object.entries(result)) {
+		if (Object.prototype.hasOwnProperty.call(characterValues, name)) {
+			if (!characterValues[name].includes(String(setting))) throw new Error(t("fieldNameInvalidPresentationValue", { field, name }));
+			continue;
+		}
 		if (name === "hyphens") {
 			if (!/^(pdf|docx)\./.test(field) || !["auto", "none"].includes(String(setting))) throw new Error(t("fieldNameInvalidPresentationValue", { field, name }));
 			continue;

@@ -79,7 +79,7 @@ local function inlines(content, inherited, inherited_rule, inherited_definition)
         local style = selector and combined(inherited, conditional or config.styles[selector]) or inherited
         if not style or not style.hidden then
           if element.content then element.content = inlines(element.content, style) end
-          if element.t == 'Emph' or element.t == 'Strong' then result:extend(element.content)
+          if element.t == 'Emph' or element.t == 'Strong' or element.t == 'SmallCaps' or element.t == 'Subscript' or element.t == 'Superscript' or element.t == 'Span' and selector == '.smallcaps' then result:extend(element.content)
           else result:insert(style and (selector or not element.content) and pandoc.Span({element}, pandoc.Attr('', {}, {['custom-style'] = style.id})) or element) end
         end
       end
@@ -189,12 +189,12 @@ walk = function(blocks, kind, inherited, inherited_definition, container, contin
         local style = selected(block.t == 'BulletList' and 'ul' or 'ol')
         if not style.hidden then
           if conditional and (style.pageBreak == 'left' or style.pageBreak == 'right') then result:insert(page_break(style.pageBreak)) end
-          for index, item in ipairs(block.content) do block.content[index] = walk(item, 'item', nil, nil, conditional and style or container) end
+          for index, item in ipairs(block.content) do block.content[index] = walk(item, 'item', nil, nil, (conditional or style.characterFormatting) and style or container) end
           result:insert(block)
         end
       elseif block.t == 'Table' then
         local style = selected('table')
-        local function rows(list, cell_kind) for _, row in ipairs(list) do for _, cell in ipairs(row.cells) do cell.contents = walk(cell.contents, cell_kind, nil, nil, conditional and style or container) end end end
+        local function rows(list, cell_kind) for _, row in ipairs(list) do for _, cell in ipairs(row.cells) do cell.contents = walk(cell.contents, cell_kind, nil, nil, (conditional or style.characterFormatting) and style or container) end end end
         rows(block.head.rows, 'th'); for _, body in ipairs(block.bodies) do rows(body.head, 'th'); rows(body.body, 'td') end; rows(block.foot.rows, 'td')
         if not style.hidden then
           if conditional and (style.pageBreak == 'left' or style.pageBreak == 'right') then result:insert(page_break(style.pageBreak)) end

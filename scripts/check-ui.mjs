@@ -19,17 +19,21 @@ const settingsClass = settingsSource.statements.find(node => ts.isClassDeclarati
 const definitionsMethod = settingsClass.members.find(node => ts.isMethodDeclaration(node) && node.name.getText(settingsSource) === "getSettingDefinitions");
 const definitions = new Function("t", definitionsMethod.body.getText(settingsSource)).call(new Proxy({}, { get() { throw new Error("Settings indexing must not access the app or run I/O"); } }), t);
 const indexedSettings = definitions.flatMap(group => group.items);
-for (const name of ["Projet de livre", "Cloner un projet", t("outputFolder"), "Pandoc", "LaTeX", "Chemins personnalisés", "Bibliothèque de polices", "Package de polices"]) {
+for (const name of [t("projectModel"), "Projet de livre", "Cloner un projet", t("outputFolder"), "Pandoc", "LaTeX", "Chemins personnalisés", "Bibliothèque de polices", "Package de polices"]) {
  assert.ok(indexedSettings.some(setting => setting.name === name && typeof setting.render === "function"), "Searchable setting: " + name);
 }
 for (const language of ["en", "de-DE"]) {
 	setLocale(language);
 	const englishDefinitions = new Function("t", definitionsMethod.body.getText(settingsSource)).call(new Proxy({}, { get() { throw new Error("Settings indexing must not access the app or run I/O"); } }), t);
 	const names = englishDefinitions.flatMap(group => group.items.map(setting => setting.name));
-	for (const name of ["Book project", "Clone a project", t("outputFolder"), "Custom paths", "Font library", "Font package"]) assert.ok(names.includes(name), "English searchable setting: " + name);
+	for (const name of [t("projectModel"), "Book project", "Clone a project", t("outputFolder"), "Custom paths", "Font library", "Font package"]) assert.ok(names.includes(name), "English searchable setting: " + name);
 }
 setLocale("fr");
 const directory = await mkdtemp(path.join(tmpdir(), "bookbinder-ui-"));
+const modalSource = ts.createSourceFile("project-modal.ts", await readFile(path.join(root, "plugin/project-modal.ts"), "utf8"), ts.ScriptTarget.Latest, true);
+const modalClass = modalSource.statements.find(node => ts.isClassDeclaration(node) && node.name?.text === "ProjectModal");
+const metadataMethod = modalClass.members.find(node => ts.isMethodDeclaration(node) && node.name.getText(modalSource) === "metadata");
+const metadataCode = ts.transpileModule(metadataMethod.getText(modalSource).replace(/^private\s+metadata/, "function metadata"), { compilerOptions: { target: ts.ScriptTarget.ES2021 } }).outputText;
 await build({
 	stdin: { contents: 'export * from "./plugin/i18n.ts"; export * from "./plugin/project.ts"; export * from "./plugin/project-files.ts"; export * from "./plugin/project-clone.ts"; export * from "./plugin/font-library.ts"; export * from "./plugin/epub.ts"; export * from "./plugin/presentation.ts"; export * from "./plugin/tools.ts"; export { resources } from "./scripts/resources.ts";', resolveDir: root },
 	bundle: true, platform: "node", format: "cjs", outfile: path.join(directory, "core.cjs"),
@@ -52,6 +56,20 @@ const check = async assets => {
 		const fragment = document.createDocumentFragment(); fragment.append(...Array.from(parsed.body.childNodes)); return fragment;
 	};
 	const assert = (condition, message) => { if (!condition) throw new Error(message); };
+	class MetadataSetting {
+		constructor(container) { this.container = container; }
+		setName() { return this; }
+		addTextArea(configure) { const inputEl = document.createElement("textarea"); this.container.append(inputEl); configure({ inputEl }); return this; }
+	}
+	const modelContainer = document.createElement("div"); document.body.append(modelContainer);
+	const metadata = new Function("Setting", "getLocale", "t", assets.metadataCode + "; return metadata;")(MetadataSetting, BookUI.getLocale, BookUI.t);
+	const newProject = { data: { title: "", author: "", rights: "" }, project: { metadata: { title: "Nom du dossier", author: "", rights: "" } }, markDirty() {}, refreshFilename() {} };
+	metadata.call(newProject, modelContainer, "title", "Titre", true, true);
+	const titleInput = modelContainer.querySelector("textarea");
+	assert(titleInput.value === "" && titleInput.required && !titleInput.checkValidity(), "Le titre vide du modèle reste vide et doit être saisi avant sauvegarde");
+	titleInput.value = "Nouveau livre"; titleInput.dispatchEvent(new Event("input"));
+	assert(newProject.data.title === "Nouveau livre" && titleInput.checkValidity(), "Le nouveau projet enregistre son propre titre");
+	modelContainer.remove();
 	const catalogue = document.createElement("div"); document.body.append(catalogue);
 	BookUI.mountFontCatalog(catalogue, makeEl);
 	assert(catalogue.querySelector("summary").textContent === "Consulter le catalogue des polices", "Le catalogue suit la langue d’Obsidian");
@@ -887,6 +905,15 @@ const check = async assets => {
 		const followField = label => followContainer.querySelector('[aria-label="' + label + '"]');
 		const followChange = (label, value) => { const input = followField(label); input.value = value; input.dispatchEvent(new Event("change")); };
 		followChange("Style", "h3");
+		for (const [label, property, value] of [["Exposant", "vertical-align", "super"], ["Indice", "vertical-align", "sub"], ["Capitales", "text-transform", "uppercase"], ["Petites capitales", "font-variant", "small-caps"]]) {
+			const input = followField(label); assert(input?.tagName === "BUTTON", "Bouton de caractère disponible : " + label + " / " + format);
+			input.click(); assert(follow.headings.h3[property] === value && followField(label).getAttribute("aria-pressed") === "true", "Le bouton active le format de caractère : " + label);
+			assert(followField(label).title.includes("activé"), "L’infobulle explique l’état activé");
+		}
+		assert(follow.headings.h3["vertical-align"] === "sub" && follow.headings.h3["text-transform"] === "none", "Indice/exposant et capitales/petites capitales sont exclusifs");
+		const characterPreview = followContainer.querySelector("iframe"), characterView = characterPreview.contentWindow;
+		assert(characterView.getComputedStyle(characterPreview.contentDocument.querySelector("h3 > .bookbinder-character")).verticalAlign === "sub", "L’aperçu positionne les caractères du titre en indice");
+		followField("Réinitialiser ce style").click();
 		assert(followField("Origine du corps").value === "auto", "Auto conserve la taille propre au H3 : " + format);
 		followChange("Police", "body"); followChange("Origine du corps", "body");
 		const preview = followContainer.querySelector("iframe"), view = preview.contentWindow;
@@ -916,7 +943,7 @@ const packageFonts = await Promise.all(fontCatalog.files.filter(entry => entry.k
 	const bytes = await readFile(path.join(root, "fonts", entry.path));
 	return { path: entry.path, data: bytes.toString("base64"), face: detectFontFace(bytes) };
 }));
-const expression = browser.outputFiles[0].text + "\n(" + check.toString() + ")(" + JSON.stringify({ styles, baseCss: resources["epub/base.css"], font: Buffer.from(font.data).toString("base64"), fontName: font.name, packageFonts }) + ")";
+const expression = browser.outputFiles[0].text + "\n(" + check.toString() + ")(" + JSON.stringify({ metadataCode, styles, baseCss: resources["epub/base.css"], font: Buffer.from(font.data).toString("base64"), fontName: font.name, packageFonts }) + ")";
 const result = await evaluateInChrome(expression, directory, path.join(directory, "style-editor.png"));
 assert.ok(result.changed > 5);
 const projectDirectory = path.join(directory, "projet"); await mkdir(projectDirectory);

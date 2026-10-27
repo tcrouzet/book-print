@@ -106,12 +106,14 @@ export function projectCss(project: Presentation, lookup?: FontInfoLookup, forma
 	const bodyText = { "font-family": project.style["font-family"] ?? "initial", "font-size": bodySize };
 	const declarations = (values: Record<string, string | number>) => Object.entries(values)
 		.filter(([name]) => !["page-position", "page-offset", "folio"].includes(name)).map(([name, value]) => `${name}:${value}`).join(";");
-	const rule = (selector: string, values: Record<string, string | number>) => {
+	const rule = (selector: string, values: Record<string, string | number>, container = false) => {
 		const style = [declarations(resolveBodyText(values, bodyText)), values["page-position"] === "one-third"
 			? `page-break-before:always;break-before:page;margin-top:0;padding-top:${format === "epub" ? millimetres(values["page-offset"] ?? "50mm") + "mm" : "33.3333vh"}` : values["page-position"] === "normal" ? "padding-top:0" : ""].filter(Boolean).join(";");
-		return `${selector}{${style}}`;
+		const position = values["vertical-align"];
+		const characters = container ? `${selector} .bookbinder-character` : `${selector} > .bookbinder-character,${selector} > p > .bookbinder-character`;
+		return `${selector}{${style}}` + (position !== undefined && !selector.endsWith("::first-letter") ? `\n${characters}{vertical-align:${position};font-size:${position === "baseline" ? "inherit" : ".75em"}}` : "");
 	};
-	const body = Object.fromEntries(Object.entries(project.style).filter(([name]) => ["font-family", "font-size", "line-height", "color"].includes(name)));
+	const body = Object.fromEntries(Object.entries(project.style).filter(([name]) => ["font-family", "font-size", "line-height", "color", "text-transform", "font-variant"].includes(name)));
 	const paragraph = { ...project.style };
 	if (paragraph["font-size"] !== undefined) paragraph["font-size"] = "inherit";
 	const page = declarations(project.page ?? {});
@@ -125,7 +127,7 @@ export function projectCss(project: Presentation, lookup?: FontInfoLookup, forma
 			return `@font-face{font-family:"${fontFamily(reference)}";font-weight:${face.weight};font-style:${face.style};src:url("../fonts/${encodeURIComponent(name)}")}`;
 		})),
 		`body{${declarations(body)}}`,
-		`p{${declarations(paragraph)}}`,
+		rule("p", paragraph),
 		page ? "@page{" + page + "}" : "",
 		...Object.entries(project.headings).map(([name, values]) => rule(name === "h1" ? "h1:not(.title)" : name, values)),
 		...Object.entries(project.styles ?? {}).map(([name, values]) => {
@@ -133,7 +135,7 @@ export function projectCss(project: Presentation, lookup?: FontInfoLookup, forma
 				const typography: Record<string, string | number> = { ...values, "margin-top": "0pt" }; delete typography["page-position"];
 				return rule("body .bookbinder-colophon", { "page-position": "one-third" }) + "\n" + rule("body " + name, typography);
 			}
-			return rule(name === "hr" ? "body hr,body .bookbinder-separator" : name === "body" ? "body" : "body " + name, values);
+			return rule(name === "hr" ? "body hr,body .bookbinder-separator" : name === "body" ? "body" : "body " + name, values, ["ul", "ol", "table"].includes(name));
 		}),
 		...Object.entries(project.rules ?? {}).filter(([name]) => !project.disabledRules?.includes(contextRules.find(rule => rule.selector === name)?.kind ?? ""))
 			.sort(([left], [right]) => Number(contextRules.find(rule => rule.selector === left)?.scope === "book") - Number(contextRules.find(rule => rule.selector === right)?.scope === "book"))
@@ -142,7 +144,7 @@ export function projectCss(project: Presentation, lookup?: FontInfoLookup, forma
 				const target = definition.kind === "title" ? "body h1.title" : /^h[1-6]$/.test(definition.paragraph!) ? `body ${definition.paragraph}${name}` : ["ul", "ol"].includes(definition.paragraph!) ? `body ${name} > ${definition.paragraph}`
 					: definition.paragraph === "hr" ? `body ${name} > hr,body ${name} > .bookbinder-separator`
 					: definition.paragraph === "pre" ? `body pre${name},body div${name} > pre` : "body " + name;
-				return rule(target, values);
+				return rule(target, values, ["ul", "ol", "table"].includes(definition.paragraph!));
 			}),
 		'body div[class^="bookbinder-continued-"] > p{margin-top:0!important}',
 	].join("\n");

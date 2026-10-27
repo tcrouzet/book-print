@@ -130,7 +130,8 @@
 .bookbinder-character-options { display: flex; align-items: end; gap: var(--size-4-2); flex-wrap: wrap; }
 .bookbinder-character-options > label { flex: 1; min-width: 7rem; }
 .bookbinder-style-emphasis, .bookbinder-style-alignment { display: flex; gap: var(--size-4-1); }
-.bookbinder-paragraph-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(5rem, 0.4fr); align-items: end; gap: var(--size-4-3); }
+.bookbinder-style-emphasis { flex-wrap: wrap; }
+.bookbinder-paragraph-main { display: grid; grid-template-columns: minmax(0, 1fr) repeat(2, minmax(5rem, 0.4fr)); align-items: end; gap: var(--size-4-3); }
 .bookbinder-style-margins { display: grid; grid-template-columns: repeat(4, minmax(0, 7rem)); gap: var(--size-4-2); }
 .bookbinder-style-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 

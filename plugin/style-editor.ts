@@ -122,6 +122,11 @@ export class StyleEditor {
 					element.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") select(event); });
 					preview.body.append(...Array.from(wrapper.childNodes));
 				}
+				for (const element of preview.querySelectorAll("p,h1,h2,h3,h4,h5,h6,li,th,td")) {
+					if (element.querySelector("p,ul,ol,table")) continue;
+					const span = this.makeEl("span"); span.className = "bookbinder-character";
+					span.append(...Array.from(element.childNodes)); element.append(span);
+				}
 				this.update();
 				this.renderToolbar();
 				this.reveal();
@@ -574,7 +579,8 @@ export class StyleEditor {
 		const length = (property: string) => effective ? parseFloat(String(effective[property])) : this.relativeUnits ? this.emValue(property) : points(property);
 		number(type, t("fontSizeUnit", { unit }), "font-size", length("font-size"), this.relativeUnits ? 0.1 : 1, this.relativeUnits ? 20 : 200, unit);
 		const button = (parent: HTMLElement, label: string, icon: string, active: boolean | "mixed" | undefined, action: () => void) => {
-			const input = this.makeEl("button"); input.type = "button"; input.className = "clickable-icon"; input.title = active === "mixed" ? t("labelAuto", { label }) : label;
+			const input = this.makeEl("button"); input.type = "button"; input.className = "clickable-icon";
+			input.title = active === undefined ? label : t("formattingState", { label, state: t(active === "mixed" ? "inheritedFormatting" : active ? "enabledFormatting" : "disabledFormatting") });
 			if (this.options.setIcon) this.options.setIcon(input, icon); else input.textContent = label;
 			input.setAttribute("aria-label", label); if (active !== undefined) input.setAttribute("aria-pressed", String(active));
 			if (active === "mixed") input.dataset.auto = "true";
@@ -584,6 +590,20 @@ export class StyleEditor {
 			const current = effective?.[property] ?? this.values()[property];
 			const active = current === on || property === "font-weight" && Number(current) >= 600;
 			button(emphasis, label, icon, current === undefined ? "mixed" : active, () => this.set(property, pdf ? active ? "normal" : on : current === undefined ? on : active ? "normal" : undefined));
+		}
+		for (const [property, on, off, label, icon] of [
+			["vertical-align", "super", "baseline", t("superscript"), "superscript"],
+			["vertical-align", "sub", "baseline", t("subscript"), "subscript"],
+			["text-transform", "uppercase", "none", t("capitals"), "case-upper"],
+			["font-variant", "small-caps", "normal", t("smallCaps"), "case-sensitive"],
+		]) {
+			const active = (this.values()[property] ?? effective?.[property] ?? computed.getPropertyValue(property)) === on;
+			button(emphasis, label, icon, active, () => {
+				const value = active ? off : on;
+				this.set(property, value);
+				if (value === on && property === "text-transform") this.set("font-variant", "normal");
+				if (value === on && property === "font-variant") this.set("text-transform", "none");
+			});
 		}
 		if (!pdf) button(alignment, t("automaticAlignment"), "rotate-ccw", this.values()["text-align"] === undefined, () => this.set("text-align", undefined));
 		for (const [value, label] of [["left", t("left")], ["center", t("centred")], ["right", t("right")], ["justify", t("justified")]]) {
@@ -603,7 +623,7 @@ export class StyleEditor {
 		color.addEventListener("input", () => { this.set("color", color.value); colorMode.value = "custom"; });
 		const palette = field(character, t("palette")); palette.classList.add("bookbinder-color-palette"); palette.append(color);
 		const size = parseFloat(computed.fontSize) || 16;
-		number(type, this.relativeUnits ? t("lineHeightEm") : t("lineHeightPt"), "line-height", effective ? Number(effective["line-height"]) * parseFloat(String(effective["font-size"])) : (parseFloat(computed.lineHeight) || size * 1.2) / size, this.relativeUnits ? .5 : 1, this.relativeUnits ? 5 : 1000, this.relativeUnits ? "em" : "pt");
+		number(paragraph, this.relativeUnits ? t("lineHeightEm") : t("lineHeightPt"), "line-height", effective ? Number(effective["line-height"]) * parseFloat(String(effective["font-size"])) : (parseFloat(computed.lineHeight) || size * 1.2) / size, this.relativeUnits ? .5 : 1, this.relativeUnits ? 5 : 1000, this.relativeUnits ? "em" : "pt");
 		if (pdf && blockStyle && !["hr", folioStyle.selector].includes(this.selected)) {
 			const label = t("automaticHyphenation"), input = this.makeEl("input");
 			input.type = "checkbox"; input.checked = effective?.hyphens !== "none";
