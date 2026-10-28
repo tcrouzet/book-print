@@ -113,7 +113,7 @@ Use **Settings → Bookbinder → Fonts → Import fonts…** to choose OTF, TTF
 
 The built-in EPUB presentation works without custom fonts. You can also supply your own CSS when a project needs more control.
 
-In Bookbinder’s general settings, **Fonts → Font package → Download and install** adds the optional [font collection](fonts/README.md) to the shared library. A single alphabetical catalogue includes packaged families and your personal fonts, with **Serif**, **Sans serif** or **Symbol** after each name. Packaged families keep their usage notes, licences and source links. Installation preserves existing fonts; choose a font directly in a project’s styles to use it. Font files and package notes are stored flat; installed package notes and licences have a `_package-` filename prefix.
+If an export needs missing fonts from the [font collection](fonts/README.md), Bookbinder downloads and installs the package automatically, then continues generating the book. Installed fonts are reused on later exports. You can also install the package through **Fonts → Font package → Download and install** in settings. A single alphabetical catalogue includes packaged families and your personal fonts, with **Serif**, **Sans serif** or **Symbol** after each name. Packaged families keep their usage notes, licences and source links. Installation preserves existing fonts; choose a font directly in a project’s styles to use it. Font files and package notes are stored flat; installed package notes and licences have a `_package-` filename prefix.
 
 ## Local processing
 
@@ -121,7 +121,7 @@ Bookbinder assembles the manuscript locally, renders the automatic cover in Obsi
 
 The desktop plugin accesses project resources and export destinations through the filesystem, including folders you select outside the vault. It launches local executables to check Pandoc and LaTeX versions and uses Pandoc for conversion. These operations require filesystem and process access; commands run directly, without a system shell.
 
-Opening the settings contacts GitHub and the official TeX sites to check published tool versions. Installer links open only when clicked. The optional font package downloads from GitHub when you click its installation button. Custom fonts and images otherwise come from the files you choose.
+Opening the settings contacts GitHub and the official TeX sites to check published tool versions. Installer links open only when clicked. The font package downloads from GitHub when an export needs missing package fonts or when you click its installation button. Custom fonts and images otherwise come from the files you choose.
 
 ## Documentation and support
 

@@ -7,8 +7,8 @@ import type { BookbinderSettings } from "./types";
 import { chooseFiles, chooseOutputDirectory } from "./dialogs";
 import { openProjectEditor } from "./project-modal";
 import { cloneProjectFile } from "./project-clone";
-import { fontCatalog, mountFontCatalog } from "./font-catalog.ts";
-import { installFontPackage, isFontPackageInstalled, readFontPackage } from "./font-package.ts";
+import { mountFontCatalog } from "./font-catalog.ts";
+import { isFontPackageInstalled } from "./font-package.ts";
 import { importFonts } from "./font-import.ts";
 import { readFontLibrary } from "./font-library.ts";
 import { downloadModels, listModels } from "./project-models.ts";
@@ -117,12 +117,7 @@ export class BookbinderSettingTab extends PluginSettingTab {
 			button.onClick(async () => {
 				button.setDisabled(true); status.setText(t("installingFontPackage"));
 				try {
-					const data = await readFontPackage(this.plugin.fontPackageFile, async () => {
-						const response = await requestUrl({ url: fontCatalog.archive.url, throw: false });
-						if (response.status !== 200) throw new Error(t("fontPackageDownloadFailed", { status: response.status }));
-						return response.arrayBuffer;
-					});
-					await installFontPackage(this.plugin.fontDirectory, data);
+					await this.plugin.installFonts();
 					await this.refreshFontCatalog();
 					if (connected()) { status.setText(t("fontPackageReady")); button.setButtonText(t("fontPackageInstalled")); }
 				} catch (error) {

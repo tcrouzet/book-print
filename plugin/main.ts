@@ -1,5 +1,5 @@
 import { setLocale, t } from "./i18n.ts";
-import { FileSystemAdapter, Notice, Plugin, TFile, TFolder, getLanguage, parseYaml, stringifyYaml } from "obsidian";
+import { FileSystemAdapter, Notice, Plugin, TFile, TFolder, getLanguage, parseYaml, requestUrl, stringifyYaml } from "obsidian";
 import * as path from "node:path";
 import { BookbinderSettingTab } from "./settings-tab";
 import { DEFAULT_SETTINGS, parseSettings, type BookbinderSettings } from "./types";
@@ -20,6 +20,7 @@ import { loadTranslationFiles } from "./locale-files.ts";
 import { fontCatalog } from "./font-catalog.ts";
 import { readModel } from "./project-models.ts";
 import baseModel from "../models/base.md";
+import { installFontPackage, needsFontPackage, readFontPackage } from "./font-package.ts";
 
 export default class BookbinderPlugin extends Plugin {
 	readonly resources = resources;
@@ -36,6 +37,15 @@ export default class BookbinderPlugin extends Plugin {
 	get fontPackageFile(): string { return path.join(this.pluginDirectory, "fonts", fontCatalog.archive.file); }
 	async defaultProjectData(model = this.settings.projectModel): Promise<Record<string, unknown>> {
 		return await readModel(this.modelDirectory, model, parseYaml, baseModel);
+	}
+
+	async installFonts(): Promise<void> {
+		const data = await readFontPackage(this.fontPackageFile, async () => {
+			const response = await requestUrl({ url: fontCatalog.archive.url, throw: false });
+			if (response.status !== 200) throw new Error(t("fontPackageDownloadFailed", { status: response.status }));
+			return response.arrayBuffer;
+		});
+		await installFontPackage(this.fontDirectory, data);
 	}
 
 	async onload(): Promise<void> {
@@ -109,6 +119,10 @@ export default class BookbinderPlugin extends Plugin {
 				const latex = await detectTool("xelatex", this.settings.latexPath);
 				if (latex.state !== "found") throw new Error(t("errorOpenSettingsBookbinder", { error: latex.message }));
 				xelatex = latex.path;
+			}
+			if (await needsFontPackage(project, this.fontDirectory)) {
+				notice.setMessage(t("installingFontPackage"));
+				await this.installFonts();
 			}
 			notice.setMessage(t(format === "pdf" ? "generatingPdf" : format === "docx" ? "generatingDocx" : "generatingEpub"));
 			const output = path.join(this.settings.outputDirectory || directory, `${project.filename}.${format}`);

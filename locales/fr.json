@@ -183,7 +183,7 @@
   "fontPackage": "Package de polices",
   "fontPackageCatalog": "Consulter le catalogue des polices",
   "fontPackageConflict": "Un fichier différent existe déjà : {file}. Il a été conservé.",
-  "fontPackageDescription": "Bibliothèque commune facultative, téléchargée depuis GitHub. Les polices se choisissent ensuite dans chaque projet.",
+  "fontPackageDescription": "Bibliothèque commune téléchargée depuis GitHub, automatiquement si des polices du pack manquent lors d’un export. Les polices se choisissent dans chaque projet.",
   "fontPackageDownloadFailed": "Téléchargement des polices impossible (HTTP {status}). Réessayez plus tard.",
   "fontPackageInstalled": "Installé",
   "fontPackageInvalid": "Package de polices incomplet ou invalide. Aucun fichier installé.",

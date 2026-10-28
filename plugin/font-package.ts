@@ -3,7 +3,8 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import * as path from "node:path";
 import { gunzipSync } from "node:zlib";
 import { fontCatalog as catalog, type FontCatalog } from "./font-catalog.ts";
-import { saveLibraryFont } from "./font-library.ts";
+import { listFontLibrary, saveLibraryFont } from "./font-library.ts";
+import { fontsInStyles, libraryFontPrefix, type Presentation } from "./presentation.ts";
 import { t } from "./i18n.ts";
 
 const hash = (data: Uint8Array): string => createHash("sha256").update(data).digest("hex");
@@ -48,6 +49,14 @@ export async function isFontPackageInstalled(directory: string): Promise<boolean
 
 export async function readFontPackage(localFile: string, download: () => Promise<ArrayBuffer>): Promise<Uint8Array> {
 	return await existing(localFile) ?? new Uint8Array(await download());
+}
+
+export async function needsFontPackage(project: Presentation, directory: string): Promise<boolean> {
+	const packaged = catalog.files.filter(entry => entry.kind === "font").map(entry => libraryFontPrefix + entry.path);
+	const required = fontsInStyles(project, packaged).filter(reference => packaged.includes(reference));
+	if (!required.length) return false;
+	const installed = new Set(await listFontLibrary(directory));
+	return required.some(reference => !installed.has(reference));
 }
 
 export async function installFontPackage(directory: string, data: Uint8Array): Promise<void> {

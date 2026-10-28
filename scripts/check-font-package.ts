@@ -5,8 +5,9 @@ import { tmpdir } from "node:os";
 import * as path from "node:path";
 import { brotliCompressSync, deflateSync, gzipSync } from "node:zlib";
 import { fontCatalog, fontLabel, fontTypeLabel, fontTypes } from "../plugin/font-catalog.ts";
-import { decodeFontPackage, installFontPackage, isFontPackageInstalled, readFontPackage } from "../plugin/font-package.ts";
+import { decodeFontPackage, installFontPackage, isFontPackageInstalled, needsFontPackage, readFontPackage } from "../plugin/font-package.ts";
 import { listFontLibrary } from "../plugin/font-library.ts";
+import { fontFamily, fontResources } from "../plugin/presentation.ts";
 import { detectFontFace, detectFontType, fontEmbeddingAllowed } from "../plugin/font-metadata.ts";
 import { setLocale } from "../plugin/i18n.ts";
 
@@ -131,6 +132,20 @@ for (const invalid of [Buffer.alloc(0), archive.subarray(0, -1), damaged, gzipSy
 const root = await mkdtemp(path.join(tmpdir(), "bookbinder-font-package-"));
 try {
 	const library = path.join(root, "data", "_fonts");
+	const regular = "library:EBGaramond-Regular.otf";
+	const project = { style: { "font-family": fontFamily(regular) }, headings: {}, fonts: [] };
+	const snapshot = structuredClone(project);
+	assert.equal(await needsFontPackage(project, library), true, "A style can require a package font before the library exists");
+	assert.deepEqual(project, snapshot, "Checking fonts does not change project styles");
+	assert.equal(await needsFontPackage({ style: {}, headings: {}, fonts: [regular] }, library), false, "Unused package fonts do not trigger a download");
+	assert.equal(await needsFontPackage({ style: { "font-family": "serif" }, headings: {}, fonts: [] }, library), false, "Reader and system fonts do not require the package");
+	assert.equal(await needsFontPackage({ style: { "font-family": fontFamily("Personal.ttf") }, headings: {}, fonts: ["library:Personal.ttf"] }, library), false, "A personal font is not supplied by the package");
+	for (const section of ["headings", "styles", "rules"]) assert.equal(await needsFontPackage({ style: {}, headings: {}, fonts: [], [section]: { selected: { "font-family": fontFamily(regular) } } }, library), true, "Package fonts in " + section + " are detected");
+	const partial = path.join(root, "partial"); await mkdir(partial);
+	await writeFile(path.join(partial, "EBGaramond-Regular.otf"), files.get("EBGaramond-Regular.otf")!);
+	assert.equal(await needsFontPackage(project, partial), true, "Missing bold and italic faces trigger installation too");
+	for (const reference of fontResources(regular, names.map(name => "library:" + name))) await writeFile(path.join(partial, path.basename(reference.slice("library:".length))), files.get(reference.slice("library:".length))!);
+	assert.equal(await needsFontPackage(project, partial), false, "No download when all required faces exist, even if the rest of the package is absent");
 	assert.equal(await isFontPackageInstalled(library), false);
 	await assert.rejects(installFontPackage(library, damaged), /invalid font package/);
 	await assert.rejects(readdir(library), /ENOENT/, "Invalid downloads create no library files");
@@ -150,6 +165,7 @@ try {
 	await unlink(conflict);
 	await installFontPackage(library, archive);
 	assert.equal(await isFontPackageInstalled(library), true);
+	assert.equal(await needsFontPackage(project, library), false);
 	assert.equal((await listFontLibrary(library)).length, 84);
 	await installFontPackage(library, archive);
 	assert.equal((await listFontLibrary(library)).length, 84, "Reinstallation reuses identical fonts");

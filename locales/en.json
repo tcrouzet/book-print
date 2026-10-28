@@ -183,7 +183,7 @@
   "fontPackage": "Font package",
   "fontPackageCatalog": "Browse the font catalogue",
   "fontPackageConflict": "A different file already exists: {file}. It has been preserved.",
-  "fontPackageDescription": "Optional shared library, downloaded from GitHub. Fonts are chosen separately for each project.",
+  "fontPackageDescription": "Shared library downloaded from GitHub, automatically when package fonts are missing during an export. Fonts are chosen separately for each project.",
   "fontPackageDownloadFailed": "Font package download failed (HTTP {status}). Please try again later.",
   "fontPackageInstalled": "Installed",
   "fontPackageInvalid": "Incomplete or invalid font package. No files were installed.",
