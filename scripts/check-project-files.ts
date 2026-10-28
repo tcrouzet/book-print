@@ -23,6 +23,13 @@ assert.deepEqual(Object.keys(ordered), ["title", "author", "rights", "custom", "
 assert.deepEqual(ordered, interleaved);
 assert.equal(Object.keys(interleaved)[0], "epub", "Le tri ne modifie pas les données de l’éditeur");
 assert.deepEqual(Object.keys(JSON.parse(projectYaml({ title: "Sans sections" }, JSON.stringify))), ["title"]);
+const textFields = { title: "L'expérience humaine", description: "D'abord, l'auteur dit : \"C'est l'été\". # texte", rights: "© L'auteur", filename: "experience-humaine" };
+const plainYaml = (value: unknown): string => Object.entries(value as Record<string, string>).map(([key, text]) => key + ": " + text).join("\n");
+const quoted = projectYaml(textFields, plainYaml);
+for (const [key, value] of Object.entries(textFields)) assert.ok(quoted.split("\n").includes(key + ": " + JSON.stringify(value)), "Text values use double quotes: " + key);
+const nestedText = { ...textFields, author: ["L'auteur", 'Une "autrice"'], colophon: "Première ligne\n---\nDeuxième ligne\u0085\u2028\u2029", pdf: { toc: false, "toc-depth": 2, style: { "font-size": "11pt", "text-align": "right" } } };
+assert.deepEqual(JSON.parse(projectYaml(nestedText, JSON.stringify)), nestedText, "Quoting preserves nested text, lists, numbers, booleans and line breaks");
+assert.equal(projectYaml({ description: "\u0085\u2028\u2029" }, plainYaml), 'description: "\\u0085\\u2028\\u2029"', "YAML line break characters must remain literal text");
 assert.equal(await readProjectFile(directory), undefined);
 const source = path.join(directory, "font.otf");
 await writeFile(source, "invalid font");

@@ -1,5 +1,6 @@
 import { t } from "./i18n.ts";
 import { constants } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { copyFile, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import * as path from "node:path";
 import { detectFontFace } from "./font-metadata.ts";
@@ -15,10 +16,26 @@ export interface ProjectFile {
 
 export function projectYaml(data: Record<string, unknown>, stringifyYaml: (data: unknown) => string): string {
 	const sections = ["fusion", "pdf", "docx", "epub"];
-	return stringifyYaml(Object.fromEntries([
+	const ordered = Object.fromEntries([
 		...Object.entries(data).filter(([name]) => !sections.includes(name)),
-		...sections.filter(name => Object.prototype.hasOwnProperty.call(data, name)).map(name => [name, data[name]]),
-	]));
+		...sections.filter(name => Object.prototype.hasOwnProperty.call(data, name)).map(name => [name, data[name]] as const),
+	]);
+	const prefix = "bookbinder_" + randomUUID().replace(/-/g, "") + "_", strings: string[] = [], visited = new Map<object, unknown>();
+	// Obsidian's YAML API has no option to force quoted strings.
+	const protect = (value: unknown): unknown => {
+		if (value instanceof Date) value = value.toISOString();
+		if (typeof value === "string") {
+			const index = strings.push(JSON.stringify(value).replace(/[\u0085\u2028\u2029]/g, character => "\\u" + character.charCodeAt(0).toString(16).padStart(4, "0"))) - 1;
+			return prefix + index;
+		}
+		if (!value || typeof value !== "object") return value;
+		if (visited.has(value)) return visited.get(value);
+		const result: Record<string, unknown> | unknown[] = Array.isArray(value) ? [] : {};
+		visited.set(value, result);
+		for (const [key, item] of Object.entries(value)) Object.defineProperty(result, key, { value: protect(item), enumerable: true, writable: true, configurable: true });
+		return result;
+	};
+	return stringifyYaml(protect(ordered)).replace(new RegExp('["\x27]?' + prefix + '(\\d+)["\x27]?', "g"), (_match, index: string) => strings[Number(index)]);
 }
 
 export async function readProjectFile(directory: string): Promise<ProjectFile | undefined> {
