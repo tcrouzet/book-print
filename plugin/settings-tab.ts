@@ -60,7 +60,7 @@ export class BookbinderSettingTab extends PluginSettingTab {
 				input.setValue(this.plugin.settings.projectModel);
 			};
 			input.setDisabled(true);
-			void refresh().catch(error => status.setText(error instanceof Error ? error.message : String(error))).finally(() => input.setDisabled(false));
+			void refresh().catch(error => status.setText(error instanceof Error ? error.message : String(error))).finally(() => { input.setDisabled(false); });
 			input.onChange(async value => {
 				input.setDisabled(true); status.empty();
 				try {

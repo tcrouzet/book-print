@@ -3,8 +3,8 @@ title: ""
 lang: fr
 author: ""
 rights: ""
-author-url: http://tcrouzet.com
-colophon: "[Autres textes de Thierry Crouzet…](https://tcrouzet.com/bibliographie/)"
+author-url: ""
+colophon: ""
 fusion:
   noteSeparator: ""
   excludeCharacters: _
