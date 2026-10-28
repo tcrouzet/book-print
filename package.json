@@ -1,6 +1,6 @@
 {
   "name": "bookbinder",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "description": "Production de livres depuis Obsidian avec Pandoc et LaTeX",
   "main": "main.js",
   "type": "module",
