@@ -19,8 +19,11 @@ assert.equal(model.title, ""); assert.equal(model.author, ""); assert.equal(mode
 for (const field of ["lang", "colophon", "fusion", "pdf", "docx", "epub"]) assert.deepEqual(model[field], data[field as keyof typeof data], "Models preserve project formatting: " + field);
 for (const format of ["epub", "pdf", "docx"] as const) assert.equal(parseProject(model, "Nouveau livre", format).metadata.title, "Nouveau livre", "Implicit exports derive their title from the current source");
 assert.deepEqual(await listModels(models), []);
+assert.deepEqual(await readModel(models, "base.md", JSON.parse, content), model, "The included base works offline without a models directory");
+await assert.rejects(readModel(models, "missing.md", JSON.parse, content), /missing\.md/, "Missing additional models must not silently use the base");
+assert.equal(parseSettings({ projectModel: "" }).projectModel, "base.md", "Existing settings without a model adopt the included base");
 for (const name of ["../base.md", "/base.md", "base.js", "README.md", "a/b.md", "a\\b.md"]) {
-	assert.equal(isModelName(name), false); assert.equal(parseSettings({ projectModel: name }).projectModel, "");
+	assert.equal(isModelName(name), false); assert.equal(parseSettings({ projectModel: name }).projectModel, "base.md");
 	await assert.rejects(readModel(models, name, JSON.parse));
 }
 assert.equal(parseSettings({ projectModel: "base.md" }).projectModel, "base.md");
@@ -40,6 +43,7 @@ assert.deepEqual(await listModels(models), ["base.md"]);
 const modified = content.replace("Ancien titre", "Modifié localement"); await writeFile(path.join(models, "base.md"), modified);
 await assert.rejects(downloadModels(models, request, JSON.parse), /conservé/);
 assert.equal(await readFile(path.join(models, "base.md"), "utf8"), modified);
+assert.deepEqual(await readModel(models, "base.md", JSON.parse, content), model, "The base follows the current build even when an older download exists");
 await assert.rejects(downloadModels(models, async () => ({ status: 503, text: "" }), JSON.parse), /503/);
 assert.equal(await readFile(path.join(models, "base.md"), "utf8"), modified, "Network failures preserve local models");
 const untouched = path.join(directory, "untouched");

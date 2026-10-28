@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { build } from "esbuild";
 
 const root = path.resolve(import.meta.dirname, ".."), directory = await mkdtemp(path.join(tmpdir(), "bookbinder-settings-"));
 await build({
-	stdin: { contents: 'export { BookbinderSettingTab } from "./plugin/settings-tab.ts"; export * from "./plugin/i18n.ts"; export { DEFAULT_SETTINGS } from "./plugin/types.ts";', resolveDir: root },
+	stdin: { contents: 'export { BookbinderSettingTab } from "./plugin/settings-tab.ts"; export * from "./plugin/i18n.ts"; export { DEFAULT_SETTINGS } from "./plugin/types.ts"; export { readModel } from "./plugin/project-models.ts";', resolveDir: root },
 	bundle: true, platform: "node", format: "cjs", outfile: path.join(directory, "settings.cjs"),
 	loader: { ".lua": "text", ".latex": "text", ".css": "text" },
 	plugins: [{ name: "obsidian-platform", setup(build) {
@@ -22,11 +22,11 @@ await build({
 		` }));
 	} }],
 });
-const { BookbinderSettingTab, DEFAULT_SETTINGS, setLocale, t } = createRequire(import.meta.url)(path.join(directory, "settings.cjs"));
+const { BookbinderSettingTab, DEFAULT_SETTINGS, setLocale, t, readModel } = createRequire(import.meta.url)(path.join(directory, "settings.cjs"));
 setLocale("fr");
-const modelDirectory = path.join(directory, "models"); await mkdir(modelDirectory);
-await writeFile(path.join(modelDirectory, "base.md"), '---\n{"title":"","author":"","rights":"","pdf":{},"docx":{},"epub":{}}\n---\n');
-const plugin = { settings: { ...DEFAULT_SETTINGS }, modelDirectory, async saveSettings(settings) { this.settings = settings; } };
+const modelDirectory = path.join(directory, "models");
+const baseModel = '---\n{"title":"","author":"","rights":"","pdf":{},"docx":{},"epub":{}}\n---\n';
+const plugin = { settings: { ...DEFAULT_SETTINGS }, modelDirectory, async saveSettings(settings) { this.settings = settings; }, async defaultProjectData(model) { return await readModel(modelDirectory, model, JSON.parse, baseModel); } };
 const failures = [];
 const onRejection = error => failures.push(error);
 process.on("unhandledRejection", onRejection);
@@ -71,7 +71,8 @@ try {
 		await new Promise(resolve => setImmediate(resolve));
 		assert.equal(adopted, 0, "Opening model settings must complete without resolving a UI component as a promise");
 		assert.deepEqual(failures, [], "Opening settings has no unhandled promise rejection");
-		assert.deepEqual([...setting.input.options.keys()], ["", "base.md"]);
+		assert.deepEqual([...setting.input.options.keys()], ["base.md"]);
+		assert.equal(setting.input.value, "base.md");
 		assert.equal(setting.input.disabled, false);
 		await setting.input.change("base.md");
 		assert.equal(plugin.settings.projectModel, "base.md");

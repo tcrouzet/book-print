@@ -1,8 +1,8 @@
 {
   "projectModel": "Project model",
   "projectModelMissing": "Model {file} was not found. Download models or select another one.",
-  "projectModelDescription": "The selected model is used for new projects and exports without a project. Existing projects keep their settings.",
-  "noProjectModel": "No model",
+  "projectModelDescription": "The base model is included. The selected model is used for new projects, created automatically on the first export. Existing projects keep their settings.",
+  "baseProjectModel": "Base (included)",
   "downloadModels": "Download models from GitHub",
   "downloadingModels": "Downloading models…",
   "projectModelsReady": "Models ready.",

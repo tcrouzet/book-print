@@ -9,7 +9,7 @@ const build = await context({
 	format: "cjs",
 	target: "es2021",
 	outfile: "main.js",
-	loader: { ".lua": "text", ".latex": "text", ".css": "text" },
+	loader: { ".lua": "text", ".latex": "text", ".css": "text", ".md": "text" },
 	sourcemap: production ? false : "inline",
 	minify: production,
 	logLevel: "info",

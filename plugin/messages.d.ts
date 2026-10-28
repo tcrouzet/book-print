@@ -2,7 +2,7 @@ interface BookbinderMessages {
 	projectModel: string;
 	projectModelMissing: string;
 	projectModelDescription: string;
-	noProjectModel: string;
+	baseProjectModel: string;
 	downloadModels: string;
 	downloadingModels: string;
 	projectModelsReady: string;

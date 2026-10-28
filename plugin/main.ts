@@ -1,5 +1,5 @@
 import { setLocale, t } from "./i18n.ts";
-import { FileSystemAdapter, Notice, Plugin, TFile, TFolder, getLanguage, parseYaml } from "obsidian";
+import { FileSystemAdapter, Notice, Plugin, TFile, TFolder, getLanguage, parseYaml, stringifyYaml } from "obsidian";
 import * as path from "node:path";
 import { BookbinderSettingTab } from "./settings-tab";
 import { DEFAULT_SETTINGS, parseSettings, type BookbinderSettings } from "./types";
@@ -12,13 +12,14 @@ import { exportDocx } from "./docx.ts";
 import { renderCover } from "./cover";
 import { compareVersions, detectTool } from "./tools";
 import { EPUB_VIEW, DOCX_VIEW, BookFileView } from "./book-file-view";
-import { readProjectFile } from "./project-files";
+import { projectYaml, readProjectFile, saveProjectFile } from "./project-files";
 import { linkProjectNote } from "./project-view";
 import { openProjectEditor } from "./project-modal";
 import { confirmOverwrite } from "./dialogs";
 import { loadTranslationFiles } from "./locale-files.ts";
 import { fontCatalog } from "./font-catalog.ts";
 import { readModel } from "./project-models.ts";
+import baseModel from "../models/base.md";
 
 export default class BookbinderPlugin extends Plugin {
 	readonly resources = resources;
@@ -33,8 +34,8 @@ export default class BookbinderPlugin extends Plugin {
 	get fontDirectory(): string { return path.join(this.pluginDirectory, "data", "_fonts"); }
 	get modelDirectory(): string { return path.join(this.pluginDirectory, "models"); }
 	get fontPackageFile(): string { return path.join(this.pluginDirectory, "fonts", fontCatalog.archive.file); }
-	async defaultProjectData(): Promise<Record<string, unknown>> {
-		return this.settings.projectModel ? await readModel(this.modelDirectory, this.settings.projectModel, parseYaml) : {};
+	async defaultProjectData(model = this.settings.projectModel): Promise<Record<string, unknown>> {
+		return await readModel(this.modelDirectory, model, parseYaml, baseModel);
 	}
 
 	async onload(): Promise<void> {
@@ -79,12 +80,13 @@ export default class BookbinderPlugin extends Plugin {
 			const folder = source instanceof TFolder ? source : source.parent;
 			if (!folder) throw new Error(t("theManuscriptFolderCouldNotBeFound"));
 			const directory = adapter.getFullPath(folder.path);
+			const name = source instanceof TFile ? source.basename : source.isRoot() ? this.app.vault.getName() : source.name;
 			const projectFile = await readProjectFile(directory);
 			let config: unknown;
 			try { config = projectFile === undefined ? await this.defaultProjectData() : parseYaml(projectFile.yaml); }
 			catch (error) { throw new Error(t("invalidFileError", { file: projectFile?.name ?? (this.settings.projectModel || "bookbinder.md"), error: error instanceof Error ? error.message : String(error) })); }
-			const name = source instanceof TFile ? source.basename : source.isRoot() ? this.app.vault.getName() : source.name;
 			const project = parseProject(config, name, format);
+			if (projectFile === undefined) await saveProjectFile(directory, projectYaml({ ...config as Record<string, unknown>, title: project.metadata.title }, stringifyYaml), undefined);
 			const files: TFile[] = [];
 			const collect = (entry: TFile | TFolder): void => {
 				if (entry !== source && excluded(folder.isRoot() ? entry.path : entry.path.slice(folder.path.length + 1), project.fusion)) return;

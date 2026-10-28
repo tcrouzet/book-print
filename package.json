@@ -8,7 +8,7 @@
     "dev": "node plugin/esbuild.config.mjs",
     "build": "npm run typecheck && node plugin/esbuild.config.mjs production",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types scripts/check-tools.ts && node --experimental-strip-types scripts/check-project.ts && node --experimental-strip-types scripts/check-project-files.ts && node scripts/check-file-views.mjs && node scripts/check-settings.mjs",
+    "test": "node --experimental-strip-types scripts/check-tools.ts && node --experimental-strip-types scripts/check-project.ts && node --experimental-strip-types scripts/check-project-files.ts && node scripts/check-file-views.mjs && node scripts/check-settings.mjs && node --experimental-strip-types scripts/check-export-project.mjs",
     "test:epub": "node scripts/check-epub.mjs",
     "test:ui": "node scripts/check-ui.mjs",
     "test:release": "node --experimental-strip-types scripts/check-release.ts"

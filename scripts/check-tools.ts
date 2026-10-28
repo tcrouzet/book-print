@@ -81,8 +81,8 @@ assert.ok(searchDirectories({}, "darwin", "/user").includes("/Library/TeX/texbin
 assert.ok(searchDirectories({ Path: "C:\\Tools", LOCALAPPDATA: "C:\\Users\\Test\\AppData\\Local" }, "win32", "C:\\Users\\Test")
 	.includes("C:\\Users\\Test\\AppData\\Local\\Programs\\MiKTeX\\miktex\\bin\\x64"));
 assert.ok(searchDirectories({}, "linux", "/user").includes("/user/.local/bin"));
-assert.deepEqual(parseSettings(null), { projectModel: "", pandocPath: "", latexPath: "", outputDirectory: "" });
-assert.deepEqual(parseSettings({ pandocPath: 5, latexPath: " /custom/xelatex " }), { projectModel: "", pandocPath: "", latexPath: "/custom/xelatex", outputDirectory: "" });
+assert.deepEqual(parseSettings(null), { projectModel: "base.md", pandocPath: "", latexPath: "", outputDirectory: "" });
+assert.deepEqual(parseSettings({ pandocPath: 5, latexPath: " /custom/xelatex " }), { projectModel: "base.md", pandocPath: "", latexPath: "/custom/xelatex", outputDirectory: "" });
 const source = path.join(directory, "Manuscrit", "livre.md");
 assert.equal(resolveOutputDirectory(source, ""), path.dirname(source));
 assert.equal(resolveOutputDirectory(path.join(directory, "autre", "livre.md"), ""), path.join(directory, "autre"));

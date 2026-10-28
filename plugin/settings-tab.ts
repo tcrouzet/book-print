@@ -11,7 +11,7 @@ import { fontCatalog, mountFontCatalog } from "./font-catalog.ts";
 import { installFontPackage, isFontPackageInstalled, readFontPackage } from "./font-package.ts";
 import { importFonts } from "./font-import.ts";
 import { readFontLibrary } from "./font-library.ts";
-import { downloadModels, listModels, readModel } from "./project-models.ts";
+import { downloadModels, listModels } from "./project-models.ts";
 
 export class BookbinderSettingTab extends PluginSettingTab {
 	private draft: BookbinderSettings;
@@ -51,11 +51,10 @@ export class BookbinderSettingTab extends PluginSettingTab {
 		setting.addDropdown(input => {
 			input.selectEl.setAttribute("aria-label", t("projectModel"));
 			const refresh = async () => {
-				const names = await listModels(this.plugin.modelDirectory);
+				const names = ["base.md", ...(await listModels(this.plugin.modelDirectory)).filter(name => name !== "base.md")];
 				if (!status.isConnected) return;
 				input.selectEl.replaceChildren();
-				input.addOption("", t("noProjectModel"));
-				for (const name of names) input.addOption(name, name.replace(/\.md$/, ""));
+				for (const name of names) input.addOption(name, name === "base.md" ? t("baseProjectModel") : name.replace(/\.md$/, ""));
 				if (this.plugin.settings.projectModel && !names.includes(this.plugin.settings.projectModel)) input.addOption(this.plugin.settings.projectModel, this.plugin.settings.projectModel);
 				input.setValue(this.plugin.settings.projectModel);
 			};
@@ -64,7 +63,7 @@ export class BookbinderSettingTab extends PluginSettingTab {
 			input.onChange(async value => {
 				input.setDisabled(true); status.empty();
 				try {
-					if (value) await readModel(this.plugin.modelDirectory, value, parseYaml);
+					await this.plugin.defaultProjectData(value);
 					await this.plugin.saveSettings({ ...this.plugin.settings, projectModel: value });
 					this.draft.projectModel = value;
 				} catch (error) { input.setValue(this.plugin.settings.projectModel); status.setText(error instanceof Error ? error.message : String(error)); }

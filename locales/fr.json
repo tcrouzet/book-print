@@ -1,8 +1,8 @@
 {
   "projectModel": "Modèle de projet",
   "projectModelMissing": "Le modèle {file} est introuvable. Téléchargez les modèles ou choisissez-en un autre.",
-  "projectModelDescription": "Le modèle choisi sert de base aux nouveaux projets et aux exports sans projet. Les projets existants conservent leurs réglages.",
-  "noProjectModel": "Sans modèle",
+  "projectModelDescription": "Le modèle de base est intégré. Le modèle choisi sert aux nouveaux projets, créés automatiquement au premier export. Les projets existants conservent leurs réglages.",
+  "baseProjectModel": "Base (intégré)",
   "downloadModels": "Télécharger les modèles depuis GitHub",
   "downloadingModels": "Téléchargement des modèles…",
   "projectModelsReady": "Modèles disponibles.",

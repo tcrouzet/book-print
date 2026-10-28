@@ -24,8 +24,9 @@ export async function listModels(directory: string): Promise<string[]> {
 	catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return []; throw error; }
 }
 
-export async function readModel(directory: string, name: string, parseYaml: (yaml: string) => unknown): Promise<Record<string, unknown>> {
+export async function readModel(directory: string, name: string, parseYaml: (yaml: string) => unknown, baseModel?: string): Promise<Record<string, unknown>> {
 	if (!isModelName(name)) throw new Error(t("invalidProjectModel", { file: name }));
+	if (name === "base.md" && baseModel !== undefined) return parseModel(baseModel, name, parseYaml);
 	try { return parseModel(await readFile(path.join(directory, name), "utf8"), name, parseYaml); }
 	catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new Error(t("projectModelMissing", { file: name })); throw error; }
 }

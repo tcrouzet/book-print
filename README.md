@@ -45,7 +45,7 @@ EPUB and DOCX files appear in the vault's explorer with your theme's accent colo
 
 Open **Settings → Bookbinder → Create/open project** and choose your manuscript folder.
 
-Set the title, author, language and other book details, then save. The same button opens an existing project. You can export without creating one: Bookbinder uses the file or folder name as the title and the default presentation. The default book language is French; choose another language in the project settings.
+Set the title, author, language and other book details, then save. The same button opens an existing project. **Book to** automatically creates a missing `bookbinder.md` beside the source file or inside the selected folder, using its name as the title. The **Base** model is included in the plugin, compiled from `models/base.md`, and selected by default. No download is required. Settings also let you download additional models from GitHub and choose one for new projects. Existing projects keep their settings. The default book language is French; choose another language in the project settings.
 
 **General → File name** sets the export name without an extension. Leave it empty to derive a lowercase slug from the first author’s last name and the title: Thierry Crouzet and *L’expérience humaine* produce `crouzet-experience-humaine.epub`. Spaces, accents and punctuation are normalised. The automatic suggestion follows title and author edits; a custom name remains fixed until you clear it.
 
