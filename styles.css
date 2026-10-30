@@ -1,3 +1,5 @@
+.vertical-tab-nav-item[data-setting-id="bookbinder"] .vertical-tab-nav-item-icon { display: flex; }
+
 .bookbinder-export-progress { display: flex; align-items: center; gap: .5em; }
 .bookbinder-export-progress::before {
 	content: "";

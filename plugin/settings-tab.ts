@@ -14,6 +14,7 @@ import { readFontLibrary } from "./font-library.ts";
 import { downloadModels, listModels } from "./project-models.ts";
 
 export class BookbinderSettingTab extends PluginSettingTab {
+	override icon = "bookbinder";
 	private draft: BookbinderSettings;
 	private generation = 0;
 	private statuses: Partial<Record<Tool, HTMLElement>> = {};

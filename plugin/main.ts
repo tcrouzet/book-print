@@ -1,5 +1,5 @@
 import { setLocale, t } from "./i18n.ts";
-import { FileSystemAdapter, Notice, Plugin, TFile, TFolder, getLanguage, parseYaml, requestUrl, stringifyYaml } from "obsidian";
+import { FileSystemAdapter, Notice, Plugin, TFile, TFolder, addIcon, getLanguage, parseYaml, requestUrl, stringifyYaml } from "obsidian";
 import * as path from "node:path";
 import { BookbinderSettingTab } from "./settings-tab";
 import { DEFAULT_SETTINGS, parseSettings, type BookbinderSettings } from "./types";
@@ -21,6 +21,7 @@ import { fontCatalog } from "./font-catalog.ts";
 import { readModel } from "./project-models.ts";
 import baseModel from "../models/base.md";
 import { installFontPackage, needsFontPackage, readFontPackage } from "./font-package.ts";
+import bookbinderIcon from "../icon.svg";
 
 export default class BookbinderPlugin extends Plugin {
 	readonly resources = resources;
@@ -52,6 +53,7 @@ export default class BookbinderPlugin extends Plugin {
 		setLocale(getLanguage());
 		for (const error of await loadTranslationFiles(path.join(this.pluginDirectory, "locales"))) new Notice(error);
 		this.settings = parseSettings(await this.loadData());
+		addIcon("bookbinder", bookbinderIcon);
 		this.addSettingTab(new BookbinderSettingTab(this.app, this));
 		for (const format of ["epub", "docx"] as const) {
 			const view = format === "docx" ? DOCX_VIEW : EPUB_VIEW;
