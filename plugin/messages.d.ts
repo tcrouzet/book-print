@@ -1,4 +1,14 @@
 interface BookbinderMessages {
+	footnoteCall: string;
+	footnoteIndex: string;
+	footnoteSeparator: string;
+	footnoteSeparatorLength: string;
+	footnoteSeparatorThickness: string;
+	invalidFootnoteSeparator: string;
+	notes: string;
+	notesPosition: string;
+	notesAtPageBottom: string;
+	notesAtDocumentEnd: string;
 	projectModel: string;
 	projectModelMissing: string;
 	projectModelDescription: string;

@@ -41,7 +41,14 @@ export const bookStyles: BookStyle[] = [
 ];
 
 export const folioStyle: BookStyle = { selector: ".bookbinder-folio", get label() { return t("folio"); }, sample: '<p class="bookbinder-folio">123</p>' };
-export const printBookStyles = [...bookStyles, folioStyle];
+export const noteReferenceStyle: BookStyle = { selector: ".bookbinder-note-reference", get label() { return t("footnoteCall"); }, sample: '<span><sup class="bookbinder-note-reference">1</sup></span>' };
+export const footnoteIndexStyle: BookStyle = { selector: ".bookbinder-footnote-index", get label() { return t("footnoteIndex"); }, sample: '<span><sup class="bookbinder-footnote-index">1</sup></span>' };
+export const footnoteSeparatorStyle: BookStyle = { selector: ".bookbinder-footnote-separator", get label() { return t("footnoteSeparator"); }, sample: '<div class="bookbinder-footnote-separator"></div>' };
+export const printBookStyles = [...bookStyles, folioStyle, noteReferenceStyle, footnoteIndexStyle, footnoteSeparatorStyle];
+export const footnoteMarkerDefaults = {
+	[noteReferenceStyle.selector]: { "font-family": "body", "font-size": "body", "vertical-align": "super" },
+	[footnoteIndexStyle.selector]: { "font-family": "body", "font-size": "0.85em", "vertical-align": "super" },
+};
 
 export function sortedBookStyles(format = "epub"): BookStyle[] {
 	const styles = format === "epub" ? bookStyles : printBookStyles;

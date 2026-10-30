@@ -10,9 +10,10 @@ local function character_values(parent, style)
 end
 
 local function characters(element, values)
-  if element.t == 'Str' and element.text:find('%s') then
+  -- Lua's locale-dependent whitespace classes can split UTF-8 bytes inside accented letters.
+  if element.t == 'Str' and element.text:find('[ \t\r\n\f\v]') then
     local result = pandoc.Inlines({})
-    for word, spaces in element.text:gmatch('(%S+)(%s*)') do
+    for word, spaces in element.text:gmatch('([^ \t\r\n\f\v]+)([ \t\r\n\f\v]*)') do
       result:extend(characters(pandoc.Str(word), values))
       if spaces ~= '' then result:insert(pandoc.Space()) end
     end
@@ -116,12 +117,12 @@ walk = function(blocks, kind, inherited, inherited_definition, continued, format
       if block.attr and block.classes:includes('bookbinder-note-start') then result:insert(raw(page_break(config.pageBreak))) end
       local output
       if block.t == 'Header' then
+        -- Avoid expanding footnotes inside LaTeX's moving contents argument.
+        local title = pandoc.write(pandoc.Pandoc({pandoc.Plain(block.content)}):walk({Note = function() return {} end}), 'latex')
         if block.classes:includes('bookbinder-colophon-boundary') then
-          local title = pandoc.write(pandoc.Pandoc({pandoc.Plain(block.content)}), 'latex')
           result:insert(raw(config.colophon.before .. '\\phantomsection\\addcontentsline{toc}{chapter}{' .. title .. '}'))
           output = {}
         else
-          local title = pandoc.write(pandoc.Pandoc({pandoc.Plain(block.content)}), 'latex')
           local level = ({'chapter', 'section', 'subsection', 'subsubsection', 'paragraph', 'subparagraph'})[block.level]
           local anchor = pandoc.write(pandoc.Pandoc({pandoc.Div({}, pandoc.Attr(block.identifier))}), 'latex')
           local style = selected('h' .. block.level)
@@ -145,12 +146,12 @@ walk = function(blocks, kind, inherited, inherited_definition, continued, format
         if definition then initial = config.rules[definition.selector .. '::first-letter'] or initial end
         block.content = inlines(block.content, nil, nil, character_values(formatting, style), {style = initial})
         pending, pending_definition = nil, nil
-        if kind == 'footnote' then
+        if kind == 'footnote' or kind == 'figure' then
           if style.hidden then output = {}
           else
             local before = style.continuedBefore or style.before
             -- The note label opens the line; a strut puts top space above it instead of below it.
-            if not continued and style.marginTop and style.marginTop ~= 0 then before = before .. '\\rule{0pt}{\\dimexpr\\ht\\strutbox+' .. style.marginTop .. 'pt\\relax}' end
+            if kind == 'footnote' and not continued and style.marginTop and style.marginTop ~= 0 then before = before .. '\\rule{0pt}{\\dimexpr\\ht\\strutbox+' .. style.marginTop .. 'pt\\relax}' end
             block.content:insert(1, inline(before:gsub('\\par\\begingroup', '\\begingroup')))
             block.content:insert(inline(style.after))
             output = {block}
@@ -201,7 +202,7 @@ walk = function(blocks, kind, inherited, inherited_definition, continued, format
         for _, body in ipairs(block.bodies) do rows(body.head, 'th'); rows(body.body, 'td') end
         rows(block.foot.rows, 'td')
         output = wrap(block, 'table', selected('table'))
-      elseif block.t == 'Figure' then block.content = walk(block.content, kind, nil, nil, nil, formatting); output = {block}
+      elseif block.t == 'Figure' then block.content = walk(block.content, 'figure', nil, nil, nil, formatting); output = {block}
       else output = {block} end
       result:extend(output)
     end
@@ -214,6 +215,22 @@ function Pandoc(document)
   config = pandoc.json.decode(file:read('*a')); file:close()
   definitions = {}; for _, definition in ipairs(config.ruleDefinitions) do if definition.marker then definitions[definition.marker] = definition end end
   document.meta['bookbinder-config'] = nil
+  -- Keep note paragraphs outside inline formatting commands with short arguments.
+  document = document:walk({Inline = function(element)
+    if not element.content or element.t == 'Note' or element.t == 'Image' then return end
+    local has_note = false
+    for _, child in ipairs(element.content) do if child.t == 'Note' then has_note = true end end
+    if not has_note then return end
+    local result, chunk = pandoc.Inlines({}), pandoc.Inlines({})
+    local function flush()
+      if #chunk > 0 then local copy = element:clone(); copy.content = chunk; result:insert(copy); chunk = pandoc.Inlines({}) end
+    end
+    for _, child in ipairs(element.content) do
+      if child.t == 'Note' then flush(); result:insert(child) else chunk:insert(child) end
+    end
+    flush()
+    return result
+  end})
   no_folio_id = 0
   local formatting = {['text-transform'] = config.styles.p.characters['text-transform']}
   document.blocks = walk(document.blocks, 'body', nil, nil, nil, formatting)

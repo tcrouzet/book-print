@@ -5,6 +5,7 @@ import { pdfPresentation, pdfStyleValues } from "../plugin/pdf-presentation.ts";
 import { docxPresentation } from "../plugin/docx-presentation.ts";
 import { excluded, isProjectNote, localResource, noteSeparators, parseProject, prepareMarkdown, projectCss } from "../plugin/project.ts";
 import { setLocale } from "../plugin/i18n.ts";
+import { footnoteSeparator } from "../plugin/footnote-separator.ts";
 import "./check-i18n.ts";
 import { defaultFilename, slugFilename } from "../plugin/filename.ts";
 import { applyDefaultFont, defaultPdfFont, fontChoices, fontFamily, fontsInStyles, fontVariants, projectCss as fontCss, resolveFontFamilies } from "../plugin/presentation.ts";
@@ -83,6 +84,26 @@ applyDefaultFont(existingFont, defaultPdfFont);
 assert.deepEqual(existingFont.fonts, explicitFonts, "A local copy of the same font keeps priority");
 
 const defaults = parseProject(undefined, "Manuscrit");
+for (const format of ["pdf", "docx"] as const) {
+	const project = parseProject({ [format]: { styles: { ".bookbinder-note-reference": { "font-size": "6pt" }, ".bookbinder-footnote-index": { "font-size": "12pt", "vertical-align": "baseline" }, ".bookbinder-footnote-separator": { width: "60%", "border-top-width": "1pt", color: "#123456", "text-align": "center" } } } }, "Notes", format);
+	assert.equal(pdfStyleValues(project, ".bookbinder-note-reference")["font-size"], "6pt");
+	assert.equal(pdfStyleValues(project, ".bookbinder-footnote-index")["font-size"], "12pt");
+	assert.equal(pdfStyleValues(project, ".bookbinder-footnote-index")["vertical-align"], "baseline");
+	const separator = footnoteSeparator(project);
+	assert.ok(Math.abs(separator.width / separator.textWidth - .6) < 1e-9);
+	assert.equal(separator.thickness, 1); assert.equal(separator.color, "123456"); assert.equal(separator.alignment, "center");
+	for (const width of ["0%", "100%", "5 mm"]) assert.doesNotThrow(() => parseProject({ [format]: { styles: { ".bookbinder-footnote-separator": { width } } } }, "Notes", format));
+	for (const values of [{ width: "101%" }, { width: "-1pt" }, { width: "calc(1mm)" }, { "border-top-width": "13pt" }, { "border-top-width": -1 }, { color: "constructor" }, { "text-align": "justify" }, { "font-size": "10pt" }]) assert.throws(() => parseProject({ [format]: { styles: { ".bookbinder-footnote-separator": values } } }, "Notes", format));
+}
+const noteFormatting = parseProject({ docx: { styles: { "section.footnotes p": { "page-break-before": "always" }, ".bookbinder-note-reference": { "font-size": "8pt", color: "#123456" } }, rules: { "section.footnotes .bookbinder-after-heading-footnote + p": { "page-break-before": "right" } } } }, "Notes", "docx");
+const docxNotePresentation = docxPresentation(noteFormatting, () => undefined);
+assert.equal(docxNotePresentation.styles["section.footnotes p"].pageBreak, "auto", "Legacy note page breaks are ignored");
+assert.equal(docxNotePresentation.rules["section.footnotes .bookbinder-after-heading-footnote + p"].pageBreak, "auto", "Note rules cannot force a page break");
+assert.ok(docxNotePresentation.styles[".bookbinder-note-reference"].run?.includes('w:color w:val="123456"'));
+assert.ok(docxNotePresentation.styles[".bookbinder-note-reference"].run?.includes('w:vertAlign w:val="superscript"'));
+for (const position of ["page-bottom", "document-end"]) assert.equal(parseProject({ docx: { page: { "notes-position": position } } }, "Notes", "docx").page["notes-position"], position);
+for (const position of ["bottom", "end", 1, false, null, ["document-end"], {}]) assert.throws(() => parseProject({ docx: { page: { "notes-position": position } } }, "Notes", "docx"), /notes-position/);
+for (const format of ["pdf", "epub"] as const) assert.throws(() => parseProject({ [format]: { page: { "notes-position": "document-end" } } }, "Notes", format));
 assert.equal(defaults.metadata.title, "Manuscrit");
 assert.equal(defaults.metadata.lang, "fr");
 assert.equal(parseProject({ title: "L’expérience humaine", author: "Thierry Crouzet" }, "Livre").filename, "crouzet-experience-humaine");

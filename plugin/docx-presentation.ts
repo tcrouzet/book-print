@@ -1,4 +1,5 @@
-import { printBookStyles, contextRules, folioStyle, ruleOverrides } from "./book-styles.ts";
+import { printBookStyles, contextRules, folioStyle, noteReferenceStyle, footnoteIndexStyle, footnoteSeparatorStyle, footnoteMarkerDefaults, ruleOverrides } from "./book-styles.ts";
+import { footnoteSeparator } from "./footnote-separator.ts";
 import { pdfStyleValues, resolvePrintBodyText } from "./pdf-presentation.ts";
 import { folioPage, pdfPage } from "./page-layout.ts";
 import { fontFace, fontFamily, type FontInfoLookup } from "./presentation.ts";
@@ -61,17 +62,26 @@ export function docxPresentation(project: BookProject, lookup: FontInfoLookup): 
 	};
 	let styleXml = "";
 	for (const [index, item] of printBookStyles.entries()) {
+		if (item.selector === footnoteSeparatorStyle.selector) {
+			const separator = footnoteSeparator(project), width = Math.round(separator.width * 20), remaining = separator.hidden ? 0 : Math.round(separator.textWidth * 20) - width;
+			const left = separator.alignment === "right" ? remaining : separator.alignment === "center" ? Math.round(remaining / 2) : 0;
+			const id = "BookbinderFootnoteSeparator";
+			styles[item.selector] = { id, hidden: separator.hidden };
+			const border = separator.hidden ? "" : `<w:pBdr><w:top w:val="single" w:sz="${Math.max(2, Math.round(separator.thickness * 8))}" w:space="0" w:color="${separator.color}"/></w:pBdr>`;
+			styleXml += `<w:style w:type="paragraph" w:styleId="${id}"><w:name w:val="${xml(item.label)}"/><w:pPr>${border}<w:spacing w:before="0" w:after="${separator.hidden ? 0 : 52}" w:line="1" w:lineRule="exact"/><w:ind w:left="${left}" w:right="${remaining - left}" w:firstLine="0"/></w:pPr></w:style>`;
+			continue;
+		}
 		const titleRule = contextRules.find(rule => rule.kind === "title" && rule.scope === "book" && Object.keys(project.rules[rule.selector] ?? {}).length) ?? contextRules.find(rule => rule.kind === "title" && !rule.pseudo)!;
 		const titleOverride = item.selector === "h1.title" && !project.disabledRules.includes("title") && Object.keys(project.rules[titleRule.selector] ?? {}).length;
 		const values = pdfStyleValues(project, titleOverride ? titleRule.selector : item.selector, !!titleOverride), size = parseFloat(String(values["font-size"]));
 		if (item.selector === folioStyle.selector) { values["page-break-before"] = "auto"; delete values["page-position"]; }
-		const character = ["em", "strong", "del", ".smallcaps", "sub", "sup", "a", "code", "img"].includes(item.selector);
+		const character = ["em", "strong", "del", ".smallcaps", "sub", "sup", "a", "code", "img", noteReferenceStyle.selector, footnoteIndexStyle.selector].includes(item.selector);
 		const id = item.selector === folioStyle.selector ? "BookbinderFolio" : "BookbinderStyle" + index;
 		styles[item.selector] = { id, hidden: values.display === "none" };
 		if (!character) styles[item.selector].pageBreak = String(values["page-break-before"]);
 		const explicit = project.styles[item.selector] ?? {};
 		styles[item.selector].characterFormatting = ["vertical-align", "text-transform", "font-variant"].some(name => explicit[name] !== undefined);
-		const inline: Values = { ...(item.selector === "em" ? { "font-style": "italic" } : item.selector === "strong" ? { "font-weight": "bold" } : item.selector === "code" ? { "font-family": "monospace" } : item.selector === ".smallcaps" ? { "font-variant": "small-caps" } : item.selector === "sub" ? { "vertical-align": "sub" } : item.selector === "sup" ? { "vertical-align": "super" } : {}), ...explicit };
+		const inline: Values = { ...(footnoteMarkerDefaults[item.selector] ?? (item.selector === "em" ? { "font-style": "italic" } : item.selector === "strong" ? { "font-weight": "bold" } : item.selector === "code" ? { "font-family": "monospace" } : item.selector === ".smallcaps" ? { "font-variant": "small-caps" } : item.selector === "sub" ? { "vertical-align": "sub" } : item.selector === "sup" ? { "vertical-align": "super" } : {})), ...explicit };
 		const extra = item.selector === "a" ? '<w:u w:val="single"/>' : item.selector === "del" ? '<w:strike/>' : "";
 		const p = character ? "" : (/^h[1-6]$/.test(item.selector) ? "<w:keepNext/>" : "") + paragraph(values, size, lineHeight(item.selector)) + (/^h[1-6]$/.test(item.selector) ? `<w:outlineLvl w:val="${Number(item.selector[1]) - 1}"/>` : "");
 		const runXml = run(character ? inline : values, size) + extra;

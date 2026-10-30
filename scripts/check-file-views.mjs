@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { build } from "esbuild";
 import ts from "typescript";
+import { isProjectNote } from "../plugin/project-view.ts";
 
 const root = path.resolve(import.meta.dirname, ".."), directory = await mkdtemp(path.join(tmpdir(), "bookbinder-file-views-"));
 await build({
@@ -28,6 +29,26 @@ const { BookFileView, EPUB_VIEW, DOCX_VIEW, FileSystemAdapter, shell, setLocale,
 const source = ts.createSourceFile("main.ts", await readFile(path.join(root, "plugin/main.ts"), "utf8"), ts.ScriptTarget.Latest, true);
 const plugin = source.statements.find(ts.isClassDeclaration), onload = plugin.members.find(node => node.name?.getText(source) === "onload");
 const registration = onload.body.statements.find(node => ts.isForOfStatement(node) && node.initializer.declarations?.[0].name.getText(source) === "format");
+const commandRegistration = onload.body.statements.find(node => ts.isForOfStatement(node) && node.statement.getText(source).includes("this.addCommand("));
+assert.ok(commandRegistration, "Exports are available in the command palette independently of other plugins");
+const registerCommands = new Function("TFile", "isProjectNote", ts.transpileModule(commandRegistration.getText(source), { compilerOptions: { target: ts.ScriptTarget.ES2021 } }).outputText);
+class TFile { constructor(name, extension = "md") { this.path = name; this.extension = extension; } }
+const commands = new Map(), foreign = { id: "export-to-docx" }, calls = [];
+commands.set("docx-exporter:export-to-docx", foreign);
+let active = new TFile("Book/chapter.md");
+registerCommands.call({ addCommand(command) { commands.set("bookbinder:" + command.id, command); }, app: { workspace: { getActiveFile() { return active; } } }, generateBook(file, format) { calls.push({ file, format }); } }, TFile, isProjectNote);
+assert.equal(commands.get("docx-exporter:export-to-docx"), foreign, "Other plugins keep their own export command");
+commands.delete("docx-exporter:export-to-docx");
+for (const format of ["pdf", "docx", "epub"]) {
+	const command = commands.get("bookbinder:book-to-" + format); assert.ok(command);
+	assert.equal(command.checkCallback(true), true);
+	assert.equal(calls.length, 0, "Checking command availability does not start an export");
+	assert.equal(command.checkCallback(false), true);
+	assert.deepEqual(calls.pop(), { file: active, format }, "The active note exports without DOCX Exporter enabled");
+	for (const invalid of [undefined, new TFile("Book/bookbinder.md"), new TFile("Book/book.docx", "docx")]) {
+		const previous = active; active = invalid; assert.equal(command.checkCallback(true), false); active = previous;
+	}
+}
 assert.ok(registration, "The plugin registers its exported file formats on load");
 const register = new Function("BookFileView", "EPUB_VIEW", "DOCX_VIEW", "t", "console", ts.transpileModule(registration.getText(source), { compilerOptions: { target: ts.ScriptTarget.ES2021 } }).outputText);
 for (const occupied of [false, true]) {

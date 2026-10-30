@@ -193,6 +193,16 @@ const check = async assets => {
 			copyright.click(); count.click();
 			assert(options.copyright && !options.characterCount && tocChanges === 5, "Les deux cases sont enregistrées indépendamment");
 		}
+		if (format === "docx") {
+			const page = {}; let changes = 0;
+			BookUI.mountNotesPosition(toc, page, () => changes++, makeEl);
+			const placement = toc.querySelector('[aria-label="Emplacement des notes"]');
+			assert(placement.classList.contains("dropdown") && placement.value === "page-bottom", "Les notes Word sont en bas de page par défaut");
+			placement.value = "document-end"; placement.dispatchEvent(new Event("change"));
+			assert(page["notes-position"] === "document-end" && changes === 1, "Les notes de fin se règlent dans Docx Page");
+			const reopened = makeEl("div"); BookUI.mountNotesPosition(reopened, page, () => {}, makeEl);
+			assert(reopened.querySelector("select").value === "document-end", "L’emplacement choisi reste affiché à la réouverture");
+		}
 	}
 	const container = formatPanels[2].children[1];
 	const presentation = { style: {}, page: {}, headings: {}, fonts: [] };
@@ -344,6 +354,23 @@ const check = async assets => {
 			assert(!inspector.querySelector('[aria-label="Marge haute (pt)"]').disabled && independent.presentation.styles[".bookbinder-colophon p"]["page-position"] === undefined, "La position normale restaure les marges");
 			inspector.querySelector('[aria-label="Réinitialiser ce style"]').click();
 		} else { assert(!colophonPosition, "Ce réglage Colophon est réservé au PDF"); assert(!inspector.querySelector('[aria-label="Afficher le folio sur les pages du colophon"]'), "Le folio du Colophon est réservé au PDF"); }
+		styleChoice.value = "section.footnotes p"; styleChoice.dispatchEvent(new Event("change"));
+		assert(!inspector.querySelector('[aria-label="Saut de page avant"]'), "Les notes ne proposent pas de saut de page avant");
+		for (const [selector, label, value] of [[".bookbinder-note-reference", "Appel de note", "8"], [".bookbinder-footnote-index", "Numéro de note", "12"]]) {
+			styleChoice.value = selector; styleChoice.dispatchEvent(new Event("change"));
+			assert(styleChoice.selectedOptions[0].textContent === label && !inspector.querySelector('[aria-label="Saut de page avant"]'), "Les numéros de note ont des styles de caractère en PDF et DOCX");
+			const size = inspector.querySelector('[aria-label="Corps (pt)"]'); size.value = value; size.dispatchEvent(new Event("input"));
+			assert(independent.presentation.styles[selector]["font-size"] === value + "pt", "Les tailles d’appel et d’index restent indépendantes");
+		}
+		styleChoice.value = ".bookbinder-footnote-separator"; styleChoice.dispatchEvent(new Event("change"));
+		assert(!inspector.querySelector('[aria-label="Police"]') && !inspector.querySelector('[aria-label="Saut de page avant"]'), "Le filet ne propose pas de réglages de texte ou de saut de page");
+		const width = inspector.querySelector('[aria-label="Longueur (%)"]'), thickness = inspector.querySelector('[aria-label="Épaisseur (pt)"]');
+		width.value = "60"; width.dispatchEvent(new Event("input")); thickness.value = "1"; thickness.dispatchEvent(new Event("input"));
+		const separatorColor = inspector.querySelector('input[type="color"]'); separatorColor.value = "#123456"; separatorColor.dispatchEvent(new Event("input"));
+		const line = independent.presentation.styles[".bookbinder-footnote-separator"];
+		assert(line.width === "60%" && line["border-top-width"] === "1pt" && line.color === "#123456", "Le même éditeur de filet enregistre longueur, épaisseur et couleur dans les deux formats");
+		const separatorPreview = inspector.querySelector("iframe").contentDocument.querySelector(".bookbinder-footnote-separator");
+		assert(parseFloat(inspector.querySelector("iframe").contentWindow.getComputedStyle(separatorPreview).borderTopWidth) > 0, "L’aperçu montre le filet");
 		styleChoice.value = ".bookbinder-folio"; styleChoice.dispatchEvent(new Event("change"));
 		assert(styleChoice.selectedOptions[0].textContent === "Folio" && inspector.querySelector('[aria-label="Aligner : Droite"]').getAttribute("aria-pressed") === "true", "Le style Folio reflète son placement dans Page");
 		assert(!inspector.querySelector('[aria-label="Saut de page avant"]'), "Le folio ne peut pas provoquer de saut de page");
@@ -358,6 +385,8 @@ const check = async assets => {
 		await printRules.ready;
 		const ruleField = label => ruleContainer.querySelector('[aria-label="' + label + '"]');
 		const ruleChange = (label, value) => { const input = ruleField(label); input.value = value; input.dispatchEvent(new Event("change")); };
+		ruleChange("Style", "section.footnotes p"); ruleChange("Règle", "section.footnotes .bookbinder-after-heading-footnote + p");
+		assert(!ruleField("Saut de page avant"), "Les règles de note ne proposent pas de saut de page avant");
 		assert(!Array.from(ruleField("Style").options, option => option.value).includes(".bookbinder-folio"), "Les règles s’appliquent aux styles du manuscrit");
 		for (const style of Array.from(ruleField("Style").options, option => option.value)) {
 			ruleChange("Style", style);

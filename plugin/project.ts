@@ -1,7 +1,8 @@
 import { t } from "./i18n.ts";
 import * as path from "node:path";
 import { isProjectNote } from "./project-view.ts";
-import { bookStyles, contextRules, folioStyle } from "./book-styles.ts";
+import { bookStyles, contextRules, folioStyle, noteReferenceStyle, footnoteIndexStyle, footnoteSeparatorStyle } from "./book-styles.ts";
+import { footnoteSeparator } from "./footnote-separator.ts";
 import { millimetres, pdfPage } from "./page-layout.ts";
 import { defaultFilename, slugFilename } from "./filename.ts";
 import { applyDefaultFont, defaultPdfFont } from "./presentation.ts";
@@ -74,8 +75,14 @@ const styleProperties = new Set([
 
 function styles(value: unknown, field: string, heading = false): Record<string, string | number> {
 	const result = { ...object(value, field) };
+	const separator = field.endsWith(".styles." + footnoteSeparatorStyle.selector);
 	const characterValues: Record<string, string[]> = { "vertical-align": ["baseline", "super", "sub"], "text-transform": ["none", "uppercase"], "font-variant": ["normal", "small-caps"] };
 	for (const [name, setting] of Object.entries(result)) {
+		if (separator && !["width", "border-top-width", "color", "text-align", "display"].includes(name)) throw new Error(t("fieldNameUnknownSetting", { field, name }));
+		if (separator && ["width", "border-top-width"].includes(name)) {
+			if (typeof setting !== "string" && typeof setting !== "number") throw new Error(t("invalidFootnoteSeparator"));
+			continue;
+		}
 		if (Object.prototype.hasOwnProperty.call(characterValues, name)) {
 			if (!characterValues[name].includes(String(setting))) throw new Error(t("fieldNameInvalidPresentationValue", { field, name }));
 			continue;
@@ -140,7 +147,7 @@ export function parseProject(value: unknown, defaultTitle: string, format: "epub
 	const namedStyles: BookProject["styles"] = {};
 	const rules: BookProject["rules"] = {};
 	for (const [name, setting] of Object.entries(object(epub.styles, `${format}.styles`))) {
-		if (!bookStyles.some(style => style.selector === name && style.sample) && !(format !== "epub" && name === folioStyle.selector)) throw new Error(t("epubStylesNameUnknownStyle", { name: name }));
+		if (!bookStyles.some(style => style.selector === name && style.sample) && !(format !== "epub" && [folioStyle, noteReferenceStyle, footnoteIndexStyle, footnoteSeparatorStyle].some(style => style.selector === name))) throw new Error(t("epubStylesNameUnknownStyle", { name: name }));
 		namedStyles[name] = styles(setting, `${format}.styles.${name}`);
 	}
 	for (const [name, setting] of Object.entries(object(epub.rules, `${format}.rules`))) {
@@ -157,6 +164,7 @@ export function parseProject(value: unknown, defaultTitle: string, format: "epub
 		if (data[key] !== undefined && data[key] !== null && typeof data[key] !== "string") throw new Error(t("fieldMustReferToASingleImage", { field: key }));
 	}
 	const page = { ...object(epub.page, `${format}.page`) } as Record<string, string | number>;
+	if (format === "docx" && page["notes-position"] !== undefined && page["notes-position"] !== "page-bottom" && page["notes-position"] !== "document-end") throw new Error(t("fieldNameInvalidPresentationValue", { field: "docx.page", name: "notes-position" }));
 	if (epub.separator !== undefined && (typeof epub.separator !== "string" || epub.separator.includes("\0"))) {
 		throw new Error(t("epubSeparatorMustContainSeparatorCharacters"));
 	}
@@ -165,7 +173,7 @@ export function parseProject(value: unknown, defaultTitle: string, format: "epub
 	for (const [name, value] of Object.entries(titlePage)) {
 		if (!["copyright", "character-count"].includes(name) || typeof value !== "boolean" || format === "epub") throw new Error(t("fieldNameInvalidPresentationValue", { field: `${format}.title-page`, name }));
 	}
-	for (const key of Object.keys(page)) if (!["margin-top", "margin-bottom", "margin-left", "margin-right", ...(format !== "epub" ? ["paper-size", "paper-width", "paper-height", "page-mode", "margin-inner", "margin-outer", "binding-offset", "folio-position", "folio-offset"] : [])].includes(key)) throw new Error(t("epubPageUseTheFourPageMargins"));
+	for (const key of Object.keys(page)) if (!["margin-top", "margin-bottom", "margin-left", "margin-right", ...(format !== "epub" ? ["paper-size", "paper-width", "paper-height", "page-mode", "margin-inner", "margin-outer", "binding-offset", "folio-position", "folio-offset"] : []), ...(format === "docx" ? ["notes-position"] : [])].includes(key)) throw new Error(t("epubPageUseTheFourPageMargins"));
 	styles(Object.fromEntries(Object.entries(page).filter(([key]) => ["margin-top", "margin-bottom", "margin-left", "margin-right"].includes(key))), `${format}.page`);
 	if (format !== "epub") pdfPage(page);
 	const project: BookProject = {
@@ -182,6 +190,7 @@ export function parseProject(value: unknown, defaultTitle: string, format: "epub
 		style: paragraph,
 	};
 	if (format !== "epub") applyDefaultFont(project, defaultPdfFont);
+	if (format !== "epub") footnoteSeparator(project);
 	return project;
 }
 

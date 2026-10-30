@@ -61,7 +61,7 @@ assert.deepEqual(await Promise.all([saveLibraryFont(fontDirectory, font), saveLi
 await writeFile(path.join(fontDirectory, "notes.txt"), "Not a font");
 assert.deepEqual(await listFontLibrary(fontDirectory), [reference]);
 assert.equal((await readdir(fontDirectory)).some(name => name.startsWith(".bookbinder-font-")), false);
-const data = { title: "Un projet", epub: { fonts: [reference], toc: true, "toc-depth": 6 }, pdf: { toc: false, "toc-depth": 1, "title-page": { copyright: true, "character-count": false }, headings: { h2: { "page-break-before": "left" } } }, docx: { toc: true, "toc-depth": 3, "title-page": { copyright: false, "character-count": true }, headings: { h2: { "page-break-before": "right" } } }, custom: { preserved: true } };
+const data = { title: "Un projet", epub: { fonts: [reference], toc: true, "toc-depth": 6 }, pdf: { toc: false, "toc-depth": 1, "title-page": { copyright: true, "character-count": false }, headings: { h2: { "page-break-before": "left" } } }, docx: { toc: true, "toc-depth": 3, page: { "notes-position": "document-end" }, "title-page": { copyright: false, "character-count": true }, headings: { h2: { "page-break-before": "right" } } }, custom: { preserved: true } };
 const initial = JSON.stringify(data);
 await saveProjectFile(directory, initial, undefined);
 let saved = (await readProjectFile(directory))!;
@@ -71,6 +71,7 @@ assert.match(saved.content, /^---\n/);
 assert.match(saved.body, /\[Modifier le projet\]\(obsidian:\/\/bookbinder\)/);
 for (const format of ["pdf", "docx", "epub"] as const) {
 	const restored = parseProject(JSON.parse(saved.yaml), "Livre", format);
+	if (format === "docx") assert.equal(restored.page["notes-position"], "document-end", "Note placement survives saving and reopening");
 	assert.equal(restored.toc, data[format].toc); assert.equal(restored.tocDepth, data[format]["toc-depth"], "Saving and reopening retains each format’s table of contents settings");
 	if (format !== "epub") assert.deepEqual(restored.titlePage, { copyright: data[format]["title-page"].copyright, characterCount: data[format]["title-page"]["character-count"] }, "Title page options survive saving independently per format");
 	if (format !== "epub") assert.equal(restored.headings.h2["page-break-before"], data[format].headings.h2["page-break-before"], "Heading page parity survives saving and reopening");

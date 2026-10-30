@@ -12,7 +12,7 @@ import { fontResources, resolveFontFamilies, type FontFaceInfo } from "./present
 import { bindFilenameInput } from "./filename.ts";
 import type { FontType } from "./font-catalog.ts";
 import { pdfBaseCss } from "./pdf-presentation.ts";
-import { mountPaperFormat, mountTableOfContents, mountTitlePage } from "./page-layout.ts";
+import { mountNotesPosition, mountPaperFormat, mountTableOfContents, mountTitlePage } from "./page-layout.ts";
 
 function record(value: unknown): Record<string, unknown> {
 	return value && typeof value === "object" && !Array.isArray(value) ? { ...value as Record<string, unknown> } : {};
@@ -150,6 +150,7 @@ class ProjectModal extends Modal {
 				: t("pdfPageMarginsDescription"), cls: "bookbinder-muted" });
 			const pageFields = page.createDiv({ cls: "bookbinder-page-fields" });
 			mountTableOfContents(page, this.projects[format], format, () => this.markDirty());
+			if (format === "docx") mountNotesPosition(page, this.projects.docx.page, () => this.markDirty());
 			if (format !== "epub") mountTitlePage(page, this.projects[format].titlePage, () => this.markDirty());
 			presentation.createEl("h3", { text: t("styles") });
 			const editor = new StyleEditor(presentation, this.projects[format], format !== "epub" ? pdfBaseCss : this.baseCss, () => this.markDirty(), () => this.close(), { format, setIcon, sanitizeHTMLToDom, fontLibrary: () => this.libraryFonts, fontType: reference => this.fontTypes.get(reference), fontFace: reference => this.fontFaces.get(reference), selectFont });

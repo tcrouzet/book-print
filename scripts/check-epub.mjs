@@ -23,6 +23,12 @@ const { setLocale, parseProject, prepareMarkdown, exportEpub, detectTool, resour
 setLocale("fr");
 const pandoc = await detectTool("pandoc");
 assert.equal(pandoc.state, "found", "Pandoc doit être installé pour le contrôle EPUB.");
+const dashExamples = ["\u00a0", "\u202f"].flatMap(space => ["–", "—"].map(dash => `${dash}${space}un toit sur sa tête, de quoi manger et s’acheter des chaussures${space}${dash},`));
+const dashHtml = execFileSync(pandoc.path, ["--from=" + path.join(root, "scripts/lua/book-reader.lua"), "--lua-filter=" + path.join(root, "scripts/lua/epub-thin-space.lua"), "--to=html5", "--wrap=none"], {
+	input: JSON.stringify({ sources: [{ directory, content: dashExamples.join("\n\n") }] }), encoding: "utf8",
+});
+const decodeSpaces = text => text.replace(/&#160;/g, "\u00a0").replace(/&#8239;/g, "\u202f");
+for (const example of dashExamples) assert.ok(decodeSpaces(dashHtml).includes(`<p>${example}</p>`), "Dash spacing stays in the text, without margins or a reduced-size span: " + JSON.stringify(example));
 const generalRulesContent = [
 	"*EMPREMIER* *EMSECOND* **GRAS** ~~BARRE~~ [CAPITALES]{.smallcaps} H~DEUX~ m^CARRE^ `CODEINLINE` [LIEN](https://example.org) ![IMAGE](cover.jpg)[^1]",
 	"### PREMIERH3", "### SECONDH3", "#### TITREH4", "##### TITREH5", "###### TITREH6", "### ENCOREH3", "## PARENTH2", "### APRESH2", "# PARENTH1", "### APRESH1",
@@ -132,6 +138,7 @@ sources.push({ path: path.join(directory, "partie A/bookbinder.md"), content: "P
 sources.push({ path: path.join(directory, "book-print.md"), content: "DOCUMENT_ORDINAIRE\n" });
 sources[0].content += "\n<!-- ![[image absente.png]] -->\n%% ![[autre image absente.png]] %%\n\n![[image avec espaces.png]]\n";
 sources[0].content += "\n[Capitales]{.smallcaps} H~2~O m^2^ ~~barré~~.\n\n```{.tab}\n\tLigne tabulée *littérale*\n```\n\n> Une citation Markdown.\n";
+sources[0].content += "\n\n" + dashExamples.join("\n\n");
 const project = parseProject({ title: options.title, author: options.author, identifier: "ISBN-0", date: "1900-01-01", colophon: "COL_PERSONNEL **Édition indépendante**.\n\nFin de fabrication.", epub: { style: { "font-size": "1.1em" },
 	styles: { ".bookbinder-colophon p": { "font-size": "0.9em", "font-style": "italic", "text-align": "right", "margin-left": "0.5em", "text-indent": "0.75em" }, "h1.title": { "font-size": "2.25em", "page-position": "one-third" }, "p.tab": { "font-style": "italic", "font-size": "1.25em", "margin-left": "2em", "line-height": "1.5em", "text-align": "right" } },
 	rules: { ".bookbinder-after-heading-tab + p.tab": { "text-align": "center" }, ".bookbinder-after-heading-tab + p.tab::first-letter": { "font-size": "2em" } },
@@ -241,6 +248,7 @@ assert.match(content, /Suite de la note/);
 assert.match(content, /class="tab"/);
 assert.match(content, /class="thin-space-before">\?<\/span>/);
 assert.match(content, /Fin<span class="thin-space-before">!<\/span>/);
+for (const example of dashExamples) assert.ok(decodeSpaces(content).includes(`<p>${example}</p>`), "The generated EPUB retains the original nonbreaking spaces around both dashes");
 assert.doesNotMatch(content, /class="poem-top"|class="poem-bottom"/);
 assert.match(content, /€€Poème un/);
 assert.match(content, /class="smallcaps"/);

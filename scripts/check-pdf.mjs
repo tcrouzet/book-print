@@ -29,6 +29,28 @@ const config = { title: "TITRELIVRE", author: "AUTEURLIVRE", lang: "fr", colopho
 	rules: { ".bookbinder-after-heading-body + p": { "text-indent": "0pt" }, ".bookbinder-after-heading-body + p::first-letter": { "font-size": "16pt", color: "#aa0000" } },
 } };
 const request = { sources, directory, pandoc: pandoc.path, xelatex: latex.path, resources, fontDirectory: path.join(root, "fonts") };
+const noteStylesOutput = path.join(directory, "footnote-styles.pdf");
+await exportPdf({ ...request, output: noteStylesOutput, sources: [{ path: path.join(directory, "styled-notes.md"), content: "CALLBEFORE[^n] CALLAFTER.\n\n[^n]: FOOTNOTETEXT.\n" }], project: parseProject({ pdf: { toc: false, styles: { ".bookbinder-note-reference": { "font-size": "6pt", "vertical-align": "super", color: "#008000" }, ".bookbinder-footnote-index": { "font-size": "12pt", "vertical-align": "baseline", color: "#0000ff" }, ".bookbinder-footnote-separator": { width: "50%", "border-top-width": "1pt", color: "#ff0000", "text-align": "center" } } } }, "Footnote styles", "pdf") });
+const noteStyleBoxes = (await exec("pdftotext", ["-bbox", noteStylesOutput, "-"])).stdout;
+const noteNumbers = [...noteStyleBoxes.matchAll(/<word[^>]*yMin="([\d.]+)"[^>]*yMax="([\d.]+)"[^>]*>1<\/word>/g)].map(match => Number(match[2]) - Number(match[1]));
+assert.equal(noteNumbers.length, 2, "The call and index are native independent numbers");
+assert.ok(Math.max(...noteNumbers) > Math.min(...noteNumbers) * 2, "The index can be 12pt on the baseline while the call is 6pt superscript");
+for (const toc of [false, true]) {
+	const output = path.join(directory, "heading-notes-" + toc + ".pdf");
+	await exportPdf({ ...request, output, sources: [{ path: path.join(directory, "headings.md"), content: await readFile(path.join(root, "scripts/fixtures/heading-notes.md"), "utf8") }], project: parseProject({ pdf: { toc, "toc-depth": 6 } }, "Notes dans les titres", "pdf") });
+	const text = (await exec("pdftotext", [output, "-"])).stdout;
+	for (const marker of ["NOTEH1", "NOTEH2", "NOTEH3", "NOTEH4", "NOTEH5", "NOTEH6", "NOTEBODY", "NOTEEMPH", "NOTENESTED", "NOTELINK"]) assert.equal(text.match(new RegExp(marker, "g"))?.length, 1, "A heading or formatted note is preserved once and stays out of contents: " + marker);
+	for (const word of ["déjà", "côté", "août"]) assert.ok(text.includes(word), "Unicode stays intact during paragraph formatting: " + word);
+	assert.doesNotMatch(text, /�/);
+}
+console.log("PDF: notes in all heading levels compile with and without contents and appear once: OK.");
+await writeFile(path.join(directory, "figure.png"), Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=", "base64"));
+for (const image of ["figure.png", "missing-figure.png"]) {
+	const output = path.join(directory, image + ".pdf");
+	await exportPdf({ ...request, output, sources: [{ path: path.join(directory, "figure.md"), content: "![FIGUREDESCRIPTION](" + image + ")\n\nTexte après la figure." }], project: parseProject({ pdf: { toc: false } }, "Figures", "pdf") });
+	const text = (await exec("pdftotext", [output, "-"])).stdout;
+	assert.ok(text.includes("FIGUREDESCRIPTION") && text.includes("Texte après la figure."), "A figure keeps balanced LaTeX groups even if its image is missing");
+}
 const charactersOutput = path.join(directory, "character-formatting.pdf");
 await exportPdf({ ...request, output: charactersOutput, sources: [{ path: path.join(directory, "characters.md"), content: await readFile(path.join(root, "scripts/fixtures/character-formatting.md"), "utf8") }], project: parseProject({ title: "Titre du livre", pdf: { toc: false, headings: { h3: { "text-transform": "uppercase" } }, styles: { "h1.title": { "text-transform": "uppercase" }, em: { "vertical-align": "super" }, strong: { "vertical-align": "sub" }, "blockquote p": { "font-variant": "small-caps" }, ul: { "text-transform": "uppercase" }, table: { "text-transform": "uppercase" } }, rules: { ".bookbinder-after-heading-body + p::first-letter": { "text-transform": "uppercase" } } } }, "Livre", "pdf") });
 const charactersText = (await exec("pdftotext", ["-layout", charactersOutput, "-"])).stdout;

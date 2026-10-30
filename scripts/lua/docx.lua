@@ -164,7 +164,12 @@ walk = function(blocks, kind, inherited, inherited_definition, container, contin
           style = {id = id, hidden = style.hidden}
         end
         if block.t == 'Plain' then block = pandoc.Para(block.content) end
-        if not style.hidden then result:insert(pandoc.Div({block}, pandoc.Attr('', {}, {['custom-style'] = style.id}))) end
+        if not style.hidden then
+          if kind == 'footnote' then
+            block.content:insert(1, pandoc.RawInline('openxml', '<!--bookbinder-style:' .. style.id .. '-->'))
+            result:insert(block)
+          else result:insert(pandoc.Div({block}, pandoc.Attr('', {}, {['custom-style'] = style.id}))) end
+        end
       elseif block.t == 'BlockQuote' then result:extend(walk(block.content, 'quote'))
       elseif block.t == 'CodeBlock' then
         local style = selected('pre')
@@ -237,13 +242,18 @@ function ByteStringWriter(document, options)
   opts.reference_doc = reference_path; opts.table_of_contents = config.toc; opts.toc_depth = config.tocDepth
   local archive, parts = pandoc.zip.Archive(pandoc.write(document, 'docx', opts)), {}
   for _, entry in ipairs(archive.entries) do parts[entry.path] = entry:contents() end
-  -- Native headings keep their bookmarks and TOC level while taking the conditional style.
-  parts['word/document.xml'] = parts['word/document.xml']:gsub('<w:p[ >].-</w:p>', function(paragraph)
-    local id = paragraph:match('<!%-%-bookbinder%-style:([%w]+)%-%->')
-    if id then return paragraph:gsub('<w:pStyle[^>]*/>', '<w:pStyle w:val="' .. id .. '"/>', 1):gsub('<!%-%-bookbinder%-style:[%w]+%-%->', '') end
-  end):gsub('<!%-%-bookbinder%-code:([%w]+)%-%->(.-)<!%-%-bookbinder%-code%-end%-%->', function(id, code)
-    return code:gsub('<w:pStyle w:val="SourceCode"%s*/>', '<w:pStyle w:val="' .. id .. '"/>'):gsub('<w:rStyle w:val="VerbatimChar"%s*/>', '')
-  end)
+  -- Native paragraphs retain heading bookmarks and inline note numbers while taking their style.
+  for _, filename in ipairs({'word/document.xml', 'word/footnotes.xml'}) do
+    if parts[filename] then
+      parts[filename] = parts[filename]:gsub('<w:p[ >].-</w:p>', function(paragraph)
+        local id = paragraph:match('<!%-%-bookbinder%-style:([%w]+)%-%->')
+        if id then return paragraph:gsub('<w:pStyle[^>]*/>', '<w:pStyle w:val="' .. id .. '"/>', 1):gsub('<!%-%-bookbinder%-style:[%w]+%-%->', '') end
+      end):gsub('<!%-%-bookbinder%-code:([%w]+)%-%->(.-)<!%-%-bookbinder%-code%-end%-%->', function(id, code)
+        return code:gsub('<w:pStyle w:val="SourceCode"%s*/>', '<w:pStyle w:val="' .. id .. '"/>'):gsub('<w:rStyle w:val="VerbatimChar"%s*/>', '')
+      end)
+    end
+  end
+  parts['word/document.xml'] = parts['word/document.xml']:gsub('<w:rStyle w:val="FootnoteReference"%s*/>', '<w:rStyle w:val="' .. config.styles['.bookbinder-note-reference'].id .. '"/>')
   -- Pandoc's default table grid can exceed the chosen paper's text width.
   parts['word/document.xml'] = parts['word/document.xml']:gsub('<w:tblGrid>(.-)</w:tblGrid>', function(grid)
     local total = 0; for width in grid:gmatch('w:w="(%d+)"') do total = total + tonumber(width) end
@@ -322,7 +332,39 @@ function ByteStringWriter(document, options)
     settings = settings:gsub('<w:' .. name .. '%f[%s/>][^>]*/>', '')
     if element then settings = insert_setting(settings, name, element) end
   end
-  parts['word/settings.xml'] = settings
+  if parts['word/footnotes.xml'] then
+    parts['word/footnotes.xml'] = parts['word/footnotes.xml']:gsub('<w:rStyle w:val="FootnoteReference"%s*/>', '<w:rStyle w:val="' .. config.styles['.bookbinder-footnote-index'].id .. '"/>')
+    parts['word/footnotes.xml'] = parts['word/footnotes.xml']:gsub('(<w:footnote%s[^>]*>)(.-)(</w:footnote>)', function(start, content, stop)
+      if start:find('w:type="separator"', 1, true) or start:find('w:type="continuationSeparator"', 1, true) then
+        content = '<w:p><w:pPr><w:pStyle w:val="' .. config.styles['.bookbinder-footnote-separator'].id .. '"/></w:pPr><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>'
+      end
+      return start .. content .. stop
+    end)
+    -- Pandoc can leave note image relationships in document.xml.rels.
+    local filename = 'word/_rels/footnotes.xml.rels'
+    local relationships = parts[filename] or '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>'
+    local required, existing = {}, {}
+    for id in parts['word/footnotes.xml']:gmatch('r:[%w]+="([^"]+)"') do required[id] = true end
+    for id in relationships:gmatch('Id="([^"]+)"') do existing[id] = true end
+    for relationship in parts['word/_rels/document.xml.rels']:gmatch('<Relationship%s[^>]-/>') do
+      local id = relationship:match('Id="([^"]+)"')
+      if required[id] and not existing[id] then relationships = relationships:gsub('</Relationships>', function() return relationship .. '</Relationships>' end); existing[id] = true end
+    end
+    parts[filename] = relationships
+  end
+  local note_kind = config.notesPosition == 'document-end' and 'endnote' or 'footnote'
+  if note_kind == 'endnote' and parts['word/footnotes.xml'] then
+    parts['word/endnotes.xml'] = parts['word/footnotes.xml']:gsub('(<[/]?)w:footnote', '%1w:endnote')
+    parts['word/footnotes.xml'] = nil
+    parts['word/_rels/endnotes.xml.rels'], parts['word/_rels/footnotes.xml.rels'] = parts['word/_rels/footnotes.xml.rels'], nil
+    parts['word/document.xml'] = parts['word/document.xml']:gsub('(<[/]?)w:footnoteReference', '%1w:endnoteReference')
+    parts['word/_rels/document.xml.rels'] = parts['word/_rels/document.xml.rels']:gsub('/relationships/footnotes"', '/relationships/endnotes"'):gsub('Target="footnotes%.xml"', 'Target="endnotes.xml"')
+    parts['[Content_Types].xml'] = parts['[Content_Types].xml']:gsub('PartName="/word/footnotes%.xml"', 'PartName="/word/endnotes.xml"'):gsub('wordprocessingml%.footnotes%+xml', 'wordprocessingml.endnotes+xml')
+  end
+  for _, kind in ipairs({'footnote', 'endnote'}) do
+    settings = settings:gsub('<w:' .. kind .. 'Pr%f[%s/>][^>]*/>', ''):gsub('<w:' .. kind .. 'Pr%f[%s>][^>]*>.-</w:' .. kind .. 'Pr>', '')
+  end
+  parts['word/settings.xml'] = insert_setting(settings, note_kind .. 'Pr', '<w:' .. note_kind .. 'Pr><w:pos w:val="' .. (note_kind == 'endnote' and 'docEnd' or 'pageBottom') .. '"/><w:numFmt w:val="decimal"/><w:' .. note_kind .. ' w:id="-1"/><w:' .. note_kind .. ' w:id="0"/></w:' .. note_kind .. 'Pr>')
   local entries = {}; for name, content in pairs(parts) do entries[#entries + 1] = pandoc.zip.Entry(name, content) end
   table.sort(entries, function(a, b) return a.path < b.path end)
   return pandoc.zip.Archive(entries):bytestring()

@@ -69,6 +69,16 @@ export default class BookbinderPlugin extends Plugin {
 			} catch (error) { new Notice(error instanceof Error ? error.message : String(error)); }
 		});
 		this.registerMarkdownPostProcessor((element, context) => linkProjectNote(element, context.sourcePath, this.app.vault.getName()));
+		for (const format of ["pdf", "docx", "epub"] as const) this.addCommand({
+			id: `book-to-${format}`,
+			name: format === "pdf" ? "Book to PDF" : format === "docx" ? "Book to Docx" : "Book to ePub",
+			checkCallback: checking => {
+				const file = this.app.workspace.getActiveFile();
+				if (!(file instanceof TFile) || file.extension.toLowerCase() !== "md" || isProjectNote(file.path)) return false;
+				if (!checking) void this.generateBook(file, format);
+				return true;
+			},
+		});
 		this.registerEvent(this.app.workspace.on("file-menu", (menu, file) => {
 			if (!(file instanceof TFolder) && !(file instanceof TFile && file.extension.toLowerCase() === "md")) return;
 			if (file instanceof TFile && isProjectNote(file.path)) return;

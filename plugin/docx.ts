@@ -57,7 +57,7 @@ export async function exportDocx(request: DocxRequest): Promise<string | undefin
 		let cover: string | undefined;
 		if (project.cover) { cover = localResource(directory, project.cover); await access(cover); }
 		const page = pdfPage(project.page);
-		await writeFile(path.join(temporary, "presentation.json"), JSON.stringify({ ...presentation, pageBreak, ruleDefinitions, toc: project.toc, tocDepth: project.tocDepth, cover,
+		await writeFile(path.join(temporary, "presentation.json"), JSON.stringify({ ...presentation, pageBreak, ruleDefinitions, toc: project.toc, tocDepth: project.tocDepth, notesPosition: project.page["notes-position"] ?? "page-bottom", cover,
 			coverMaxHeight: project.titlePage.characterCount || project.titlePage.copyright && !!metadata.rights ? (page.height - page.top - page.bottom) * 72 / 25.4 - 48 : undefined,
 			fontTable, fonts: [...embedded.values()].map(font => ({ ...font, path: path.join(temporary, font.file) })),
 			creditStyle: { id: "BookbinderCredit", xml: `<w:style w:type="paragraph" w:styleId="BookbinderCredit"><w:name w:val="BookbinderCredit"/><w:basedOn w:val="${presentation.styles[".bookbinder-colophon p"].id}"/><w:pPr><w:spacing w:before="660"/><w:ind w:firstLine="0" w:left="0" w:right="0"/><w:jc w:val="center"/></w:pPr><w:rPr><w:sz w:val="18"/></w:rPr></w:style>` } }));

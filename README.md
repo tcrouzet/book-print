@@ -28,10 +28,16 @@ EPUB and DOCX export need **Pandoc 3.1.1 or later**, without Python or LaTeX. PD
 
 Right-click a Markdown file or a folder in the vault's file explorer and choose **Book to ePub**, **Book to PDF** or **Book to Docx**.
 
+For the active Markdown note, the same **Book to PDF**, **Book to Docx** and **Book to ePub** commands are available in Obsidian’s command palette. They work independently of other export plugins.
+
 - A file becomes a book on its own.
 - A folder brings together Markdown files from its whole hierarchy, sorted by path. Number chapter filenames when you want to set their order.
 
 The assembly happens in memory. Your source notes stay intact, and Bookbinder creates no merged Markdown file. Footnotes and relative image paths stay attached to their source chapters.
+
+Under **Docx → Page → Notes**, choose **Bottom of page** (default) or **End of document**. Both use native editable Word notes, preserving note paragraphs, formatting, links and images. The setting is saved per project as `docx.page.notes-position` (`page-bottom` or `document-end`). Notes with the same Markdown identifier in different chapters remain distinct.
+
+The note number stays on the same line as the first paragraph. PDF and Docx offer separate **Footnote** (note text), **Footnote call** (the mark in the manuscript), **Footnote index** (the number before the note) and **Footnote separator** styles. Call and index styles control font, size, colour and superscript independently. The separator controls line length, thickness, colour, alignment and visibility, with the same settings in both formats. Note styles and rules have no page-break control.
 
 In the project's assembly settings, choose no separator, a page break, or a break to an even or odd page between notes. EPUB reading apps may treat even and odd page requests as ordinary page breaks.
 

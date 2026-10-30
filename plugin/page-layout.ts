@@ -4,6 +4,20 @@ import type { BookProject } from "./project.ts";
 
 type Page = Record<string, string | number>;
 
+export function mountNotesPosition(container: HTMLElement, page: Page, changed: () => void, makeEl: typeof createEl = createEl): void {
+	const heading = makeEl("h3"); heading.textContent = t("notes"); container.append(heading);
+	const label = makeEl("label"); label.className = "bookbinder-page-field";
+	const text = makeEl("span"); text.textContent = t("notesPosition"); label.append(text);
+	const select = makeEl("select"); select.classList.add("dropdown"); select.setAttribute("aria-label", t("notesPosition"));
+	for (const [value, name] of [["page-bottom", t("notesAtPageBottom")], ["document-end", t("notesAtDocumentEnd")]]) {
+		const option = makeEl("option"); option.value = value; option.textContent = name; select.append(option);
+	}
+	page["notes-position"] ??= "page-bottom";
+	select.value = String(page["notes-position"]);
+	select.addEventListener("change", () => { page["notes-position"] = select.value; changed(); });
+	label.append(select); container.append(label);
+}
+
 export function mountTitlePage(container: HTMLElement, options: BookProject["titlePage"], changed: () => void, makeEl: typeof createEl = createEl): void {
 	const heading = makeEl("h3"); heading.textContent = t("titlePage"); container.append(heading);
 	const fields = makeEl("div"); fields.className = "bookbinder-page-fields"; container.append(fields);

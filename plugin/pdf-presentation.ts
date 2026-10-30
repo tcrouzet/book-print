@@ -1,5 +1,6 @@
 import { t } from "./i18n.ts";
-import { printBookStyles, contextRules, folioStyle, ruleOverrides } from "./book-styles.ts";
+import { printBookStyles, contextRules, folioStyle, noteReferenceStyle, footnoteIndexStyle, footnoteMarkerDefaults, ruleOverrides } from "./book-styles.ts";
+import { footnoteSeparator } from "./footnote-separator.ts";
 import { defaultPdfFont, fontFamily, resolveBodyText, type Presentation } from "./presentation.ts";
 import { folioPage, pdfPage } from "./page-layout.ts";
 import type { BookProject } from "./project.ts";
@@ -7,9 +8,10 @@ import { lengthValue } from "./length-input.ts";
 
 type Values = Record<string, string | number>;
 const bodyDefaults: Values = { "font-family": fontFamily(defaultPdfFont), "font-size": "11pt", "line-height": 1.2, color: "#000000" };
-export const pdfBaseCss = "body{font-size:11pt;line-height:1.2;hyphens:auto}p{margin:0;text-indent:1.2em}h1,h2,h3,h4,h5,h6{font-weight:bold;margin:1em 0 .5em;line-height:1.2;hyphens:none}h1{font-size:2em}h2{font-size:1.5em}h3{font-size:1.25em}h4,h5,h6{font-size:1em}h1.title{text-align:center;font-size:2.5em}blockquote p{margin-left:2em;margin-right:2em}section.footnotes p{font-size:.85em}p.tab{white-space:pre-wrap}.bookbinder-after-heading-body + p{text-indent:0}.bookbinder-credit{text-align:center}.bookbinder-folio{font-size:.8em;text-align:center;text-indent:0}";
+export const pdfBaseCss = "body{font-size:11pt;line-height:1.2;hyphens:auto}p{margin:0;text-indent:1.2em}h1,h2,h3,h4,h5,h6{font-weight:bold;margin:1em 0 .5em;line-height:1.2;hyphens:none}h1{font-size:2em}h2{font-size:1.5em}h3{font-size:1.25em}h4,h5,h6{font-size:1em}h1.title{text-align:center;font-size:2.5em}blockquote p{margin-left:2em;margin-right:2em}section.footnotes p{font-size:.85em}p.tab{white-space:pre-wrap}.bookbinder-after-heading-body + p{text-indent:0}.bookbinder-credit{text-align:center}.bookbinder-folio{font-size:.8em;text-align:center;text-indent:0}.bookbinder-note-reference,.bookbinder-footnote-index{vertical-align:super;font-size:smaller}.bookbinder-footnote-separator{width:40%;border-top:0.4pt solid currentColor;margin-bottom:2.6pt}";
 
 const defaults: Record<string, Values> = {
+	...footnoteMarkerDefaults,
 	p: { "text-indent": "1.2em" },
 	...Object.fromEntries([2, 1.5, 1.25, 1, 1, 1].map((size, index) => ["h" + (index + 1), {
 		"font-size": size + "em", "line-height": 1.2, hyphens: "none", "font-weight": "bold", "margin-top": "1em", "margin-bottom": "0.5em", "text-indent": "0pt",
@@ -47,24 +49,25 @@ export function pdfStyleValues(project: Presentation, selector: string, rules = 
 	const definitions = pdfStyleDefinitions(project);
 	const rule = rules ? contextRules.find(rule => rule.selector === selector) : undefined;
 	const parent = rule ? pdfStyleValues(project, rule.pseudo ? selector.replace("::first-letter", "") : rule.paragraph!, !!rule.pseudo) : undefined;
-	const raw = rule ? resolvePrintBodyText(project, { ...(rule.kind === "body" && !rule.pseudo ? { "text-indent": "0pt" } : {}), ...ruleOverrides(project, rule) }) : definitions[selector] ?? {};
+	const raw = rule ? resolvePrintBodyText(project, { ...(rule.kind === "body" && !rule.pseudo ? { "text-indent": "0pt" } : {}), ...ruleOverrides(project, rule) }) : definitions[selector] ?? resolvePrintBodyText(project, project.styles?.[selector] ?? {});
 	const inheritedSize = parent ? parseFloat(String(parent["font-size"])) : base;
 	const size = points(raw["font-size"] ?? inheritedSize, inheritedSize, "font-size");
 	const fallbackLine = rule && /^h[1-6](?:\.title)?$/.test(rule.paragraph!) ? definitions[rule.paragraph!]["line-height"] : project.style["line-height"];
 	const line = raw["line-height"] ?? (raw["font-size"] !== undefined || !parent ? fallbackLine ?? bodyDefaults["line-height"] : parent["line-height"]);
 	const lineHeight = /^\d+(?:\.\d+)?$/.test(String(line)) ? Number(line) : points(line, size, "line-height") / size;
-	const inline = ["code", "em", "strong", "del", ".smallcaps", "sub", "sup", "a", "img"].includes(selector);
+	const inline = ["code", "em", "strong", "del", ".smallcaps", "sub", "sup", "a", "img", noteReferenceStyle.selector, footnoteIndexStyle.selector].includes(selector);
 	const inherited: Values = parent ?? {
 		"font-family": ["code", "pre"].includes(selector) ? "monospace" : project.style["font-family"] ?? bodyDefaults["font-family"],
 		"font-weight": selector === "strong" ? "bold" : inline ? project.style["font-weight"] ?? "normal" : "normal",
 		"font-style": selector === "em" ? project.style["font-style"] === "italic" ? "normal" : "italic" : inline ? project.style["font-style"] ?? "normal" : "normal",
-		"vertical-align": selector === "sub" ? "sub" : selector === "sup" ? "super" : "baseline",
+		"vertical-align": selector === "sub" ? "sub" : ["sup", noteReferenceStyle.selector, footnoteIndexStyle.selector].includes(selector) ? "super" : "baseline",
 		"font-variant": selector === ".smallcaps" ? "small-caps" : project.style["font-variant"] ?? "normal", "text-transform": project.style["text-transform"] ?? "none",
 		color: project.style.color ?? bodyDefaults.color, "text-align": ["code", "pre"].includes(selector) ? "left" : "justify",
 		"text-indent": base * 1.2 + "pt", "margin-top": "0pt", "margin-bottom": "0pt", "margin-left": "0pt", "margin-right": "0pt", "letter-spacing": "0pt",
 		display: "block", "page-break-before": "auto", "page-position": "", hyphens: project.style.hyphens ?? "auto",
 	};
 	const result: Values = { ...inherited, ...raw, "font-size": size + "pt", "line-height": Number(lineHeight.toFixed(6)) };
+	if ((rule?.paragraph ?? selector) === "section.footnotes p") { result["page-break-before"] = "auto"; result["page-position"] = ""; }
 	if (selector === folioStyle.selector) {
 		const alignment = folioPage(project.page ?? {}).alignment;
 		result["text-align"] = alignment === "none" ? "center" : alignment;
@@ -177,6 +180,15 @@ export function pdfPresentation(project: BookProject, fonts: readonly string[]):
 	};
 	header += `\\setlength{\\footskip}{${page.bottom - folio.offset}mm}\n\\makeatletter\n\\def\\ps@plain{\\let\\@oddhead\\@empty\\let\\@evenhead\\@empty\\def\\@oddfoot{${footer(false)}}\\def\\@evenfoot{${footer(true)}}}\n\\makeatother\n`;
 	header += "\\makeatletter\\renewcommand{\\cleardoublepage}{\\if@twoside\\BookbinderOddPage\\else\\clearpage\\fi}\\makeatother\n";
+	const marker = (selector: string) => {
+		const values = pdfStyleValues(project, selector), formatted = style(values), position = values["vertical-align"];
+		return formatted.hidden ? "\\hbox{}" : "\\hbox{" + formatted.inline + (position === "super" ? "\\textsuperscript{" : position === "sub" ? "\\textsubscript{" : "{") + "\\@thefnmark}}";
+	};
+	header += "\\makeatletter\n\\newcommand{\\BookbinderFootnoteCall}{" + marker(noteReferenceStyle.selector) + "}\n\\newcommand{\\BookbinderFootnoteIndex}{" + marker(footnoteIndexStyle.selector) + "}\n";
+	header += "\\AtBeginDocument{\\let\\@makefnmark\\BookbinderFootnoteCall\\long\\def\\@makefntext#1{\\begingroup\\parindent1em\\noindent\\hb@xt@1.8em{\\hss\\BookbinderFootnoteIndex\\kern.35em}#1\\endgroup}}\n\\makeatother\n";
+	const separator = footnoteSeparator(project);
+	const rule = separator.hidden ? "" : `\\kern-${separator.thickness + 2.6}pt\\hbox to\\columnwidth{${separator.alignment !== "left" ? "\\hfil" : ""}{\\color[HTML]{${separator.color}}\\vrule width${separator.width}pt height${separator.thickness}pt depth0pt}${separator.alignment !== "right" ? "\\hfil" : ""}}\\kern2.6pt`;
+	header += "\\renewcommand{\\footnoterule}{" + rule + "}\n";
 	const credit = style({ "font-size": base * 0.8 + "pt", "text-align": "center", "text-indent": "0pt", "margin-top": "3em", "margin-left": "0pt", "margin-right": "0pt" });
 	return { header, styles, rules, credit, colophon };
 }

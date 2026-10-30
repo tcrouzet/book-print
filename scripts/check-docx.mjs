@@ -23,6 +23,50 @@ const sources = [
 const request = { sources, directory, pandoc: pandoc.path, resources, fontDirectory: path.join(root, "fonts") };
 const sourceHashes = new Set(await Promise.all((await readdir(request.fontDirectory)).filter(name => /\.(otf|ttf)$/i.test(name)).map(async name => createHash("sha256").update(await readFile(path.join(request.fontDirectory, name))).digest("hex"))));
 const extract = async (file, part) => (await exec("unzip", ["-p", file, part === "[Content_Types].xml" ? "\\[Content_Types\\].xml" : part], { maxBuffer: 16 * 1024 * 1024 })).stdout;
+for (const position of [undefined, "page-bottom", "document-end"]) {
+	const output = path.join(directory, "notes-" + (position ?? "default") + ".docx");
+	await exportDocx({ ...request, output, project: parseProject({ docx: { toc: false, page: position ? { "notes-position": position } : {}, styles: { "section.footnotes p": { "page-break-before": "always" }, ".bookbinder-note-reference": { "font-size": "8pt", color: "#123456", "vertical-align": "super" }, ".bookbinder-footnote-index": { "font-size": "12pt", color: "#654321", "vertical-align": "baseline" }, ".bookbinder-footnote-separator": { width: "60%", "border-top-width": "1pt", color: "#ABCDEF", "text-align": "center" } } } }, "Notes", "docx"), sources: [
+		{ path: path.join(directory, "note-a.md"), content: "Text[^1].\n\n[^1]: FIRSTNOTE **bold** [link](https://example.org/notes).\n\n    Second paragraph.\n" },
+		{ path: path.join(directory, "note-b.md"), content: "More text[^1].\n\n[^1]: SECONDNOTE *italic* ![image](image.png).\n" },
+	] });
+	const kind = position === "document-end" ? "endnote" : "footnote";
+	const document = await extract(output, "word/document.xml"), notes = await extract(output, `word/${kind}s.xml`), relationships = await extract(output, `word/_rels/${kind}s.xml.rels`), settings = await extract(output, "word/settings.xml");
+	const references = [...document.matchAll(new RegExp(`<w:${kind}Reference\\b[^>]*w:id="(\\d+)"`, "g"))].map(match => match[1]);
+	assert.equal(references.length, 2, "References from independently numbered source files are preserved");
+	assert.equal(new Set(references).size, 2, "Notes keep distinct identifiers across files");
+	const styles = await extract(output, "word/styles.xml");
+	const referenceStyle = [...styles.matchAll(/<w:style\b[^>]*w:styleId="([^"]+)"[^>]*>([^]*?)<\/w:style>/g)].find(match => match[2].includes('w:name w:val="Footnote call"'));
+	assert.ok(referenceStyle); assert.match(referenceStyle[2], /w:sz w:val="16"/); assert.match(referenceStyle[2], /w:color w:val="123456"/);
+	const noteStyles = new Map([...styles.matchAll(/<w:style\b[^>]*w:styleId="([^"]+)"[^>]*>([^]*?)<\/w:style>/g)].map(match => [match[1], match[2]]));
+	const indexStyle = [...noteStyles].find(([, value]) => value.includes('w:name w:val="Footnote index"'));
+	assert.ok(indexStyle); assert.match(indexStyle[1], /w:sz w:val="24"/); assert.match(indexStyle[1], /w:vertAlign w:val="baseline"/); assert.match(indexStyle[1], /w:color w:val="654321"/);
+	const separatorStyle = noteStyles.get("BookbinderFootnoteSeparator"); assert.match(separatorStyle, /w:sz="8"[^>]*w:color="ABCDEF"/);
+	assert.match(notes, /w:pStyle w:val="BookbinderFootnoteSeparator"/); assert.doesNotMatch(notes, /<w:(?:continuationSeparator|separator)\s/);
+	for (const match of document.matchAll(/<w:r>([^]*?)<\/w:r>/g)) if (match[1].includes(`<w:${kind}Reference`)) assert.ok(match[1].includes(`w:rStyle w:val="${referenceStyle[1]}"`), "Every body note reference uses its own character style");
+	for (const id of references) assert.match(notes, new RegExp(`<w:${kind}\\b[^>]*w:id="${id}"`));
+	for (const text of ["FIRSTNOTE", "SECONDNOTE"]) {
+		const paragraph = [...notes.matchAll(/<w:p[ >][^]*?<\/w:p>/g)].find(match => match[0].includes(text))?.[0];
+		assert.match(paragraph, new RegExp(`<w:${kind}Ref\\b`), "The note number and its first text share a paragraph");
+		assert.ok(paragraph.includes(`w:rStyle w:val="${indexStyle[0]}"`), "The note number uses Footnote index");
+		assert.ok(!paragraph.includes(`w:rStyle w:val="${referenceStyle[1]}"`), "The body reference style does not change note text or its marker");
+	}
+	assert.doesNotMatch(notes, /<!--bookbinder-/);
+	for (const text of ["FIRSTNOTE", "SECONDNOTE", "Second paragraph."]) assert.ok(notes.includes(text));
+	assert.match(notes, /<w:hyperlink /); assert.match(notes, /<w:drawing>/);
+	assert.match(relationships, /https:\/\/example.org\/notes/); assert.match(relationships, /relationships\/image/);
+	const noteRelationship = [...(await extract(output, "word/_rels/document.xml.rels")).matchAll(/<Relationship\s[^>]*\/>/g)].find(match => match[0].includes(`/relationships/${kind}s"`));
+	assert.ok(noteRelationship); assert.match(noteRelationship[0], new RegExp(`Target="${kind}s\\.xml"`));
+	assert.match(await extract(output, "[Content_Types].xml"), new RegExp(`wordprocessingml\\.${kind}s\\+xml`));
+	assert.match(settings, new RegExp(`<w:${kind}Pr><w:pos w:val="${kind === "endnote" ? "docEnd" : "pageBottom"}"/><w:numFmt w:val="decimal"/>`));
+	assert.match(settings, new RegExp(`<w:${kind} w:id="-1"/><w:${kind} w:id="0"/>`), "Word settings reference both custom separators");
+	if (kind === "endnote") {
+		assert.doesNotMatch(document, /<w:footnoteReference/);
+		const files = (await exec("unzip", ["-Z1", output])).stdout.split("\n");
+		assert.ok(!files.includes("word/footnotes.xml") && !files.includes("word/_rels/footnotes.xml.rels"));
+	}
+	for (const xml of [document, notes, relationships, settings]) execFileSync("xmllint", ["--noout", "-"], { input: xml });
+}
+console.log("DOCX notes: native footnotes/endnotes, separate source numbering, paragraphs, links and images: OK.");
 const charactersOutput = path.join(directory, "character-formatting.docx");
 await exportDocx({ ...request, output: charactersOutput, sources: [{ path: path.join(directory, "characters.md"), content: await readFile(path.join(root, "scripts/fixtures/character-formatting.md"), "utf8") }], project: parseProject({ docx: { toc: false, headings: { h3: { "text-transform": "uppercase" } }, styles: { em: { "vertical-align": "super" }, strong: { "vertical-align": "sub" }, "blockquote p": { "font-variant": "small-caps" }, sup: { "vertical-align": "baseline" }, ".smallcaps": { "font-variant": "normal" }, ul: { "text-transform": "uppercase" }, table: { "text-transform": "uppercase" } } } }, "Livre", "docx") });
 const charactersStyles = await extract(charactersOutput, "word/styles.xml");

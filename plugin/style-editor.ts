@@ -1,6 +1,7 @@
 import { getLocale, t } from "./i18n.ts";
 import { applyDefaultFont, defaultPdfFont, fontBase, fontChoices, fontFace, fontFamiliesInStyles, fontFamily, fontFilename, projectCss, resolveFontFamilies, type FontFaceInfo, type Presentation } from "./presentation";
-import { contextRules, folioStyle, sortedBookStyles, type BookStyle } from "./book-styles";
+import { contextRules, folioStyle, noteReferenceStyle, footnoteIndexStyle, footnoteSeparatorStyle, sortedBookStyles, type BookStyle } from "./book-styles";
+import { mountFootnoteSeparator } from "./footnote-separator.ts";
 import { mountProjectTabs } from "./project-tabs";
 import { folioPage, millimetres, mountFolio, pdfMarginField } from "./page-layout.ts";
 import { fontLabel, type FontType } from "./font-catalog.ts";
@@ -415,7 +416,7 @@ export class StyleEditor {
 		const selectedRule = this.options.rules ? this.catalog.find(rule => rule.selector === this.selected)! : undefined;
 		const parentStyle = selectedRule?.paragraph ?? this.selected;
 		const canUseBodyText = this.selected !== "p";
-		const blockStyle = !selectedRule?.pseudo && !["em", "strong", "del", ".smallcaps", "sub", "sup", "code", "a", "img"].includes(parentStyle);
+		const blockStyle = !selectedRule?.pseudo && !["em", "strong", "del", ".smallcaps", "sub", "sup", "code", "a", "img", noteReferenceStyle.selector, footnoteIndexStyle.selector].includes(parentStyle);
 		const heading = blockStyle && (/^h[1-6]$/.test(parentStyle) || parentStyle === "h1.title");
 		const colophon = this.options.format === "pdf" && !this.options.rules && parentStyle === ".bookbinder-colophon p";
 		const positionable = heading || colophon;
@@ -457,6 +458,12 @@ export class StyleEditor {
 		if (disabled) {
 			navigation.remove(); panels.forEach(panel => panel.remove());
 			if (focused) Array.from(header.querySelectorAll<HTMLElement>("[aria-label]")).find(element => element.getAttribute("aria-label") === focused)?.focus();
+			return;
+		}
+		if (this.selected === footnoteSeparatorStyle.selector) {
+			navigation.remove(); panels.forEach(panel => panel.remove());
+			const controls = this.makeEl("div"); controls.className = "bookbinder-inspector-panel"; this.toolbar.append(controls);
+			mountFootnoteSeparator(controls, this.presentation, () => { this.changed(); this.update(); }, this.makeEl);
 			return;
 		}
 		if (this.selected === "hr") {
@@ -644,7 +651,7 @@ export class StyleEditor {
 			input.dataset.property = "page-position";
 		}
 		if (!pdf && positionedHeading) number(panels[2], t("headingSpaceAboveMm"), "page-offset", millimetres(this.values()["page-offset"] ?? "50mm"), 0, 300, "mm");
-		if (blockStyle && this.selected !== folioStyle.selector) {
+		if (blockStyle && parentStyle !== "section.footnotes p" && this.selected !== folioStyle.selector) {
 			const printHeading = pdf && (/^h[1-6]$/.test(parentStyle) || !!this.options.rules);
 			const current = String(effective?.["page-break-before"] ?? this.values()["page-break-before"] ?? "");
 			const options: Record<string, string> = printHeading ? { auto: t("noPageBreak"), always: t("nextPage"), left: t("evenPage"), right: t("oddPage") }
