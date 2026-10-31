@@ -268,6 +268,9 @@ assert.equal(excluded("fusion-Manuscrit-20261024-1200.md", defaults.fusion), fal
 assert.equal(excluded("partie/01.md", defaults.fusion), false);
 assert.equal(isProjectNote("bookbinder.md"), true);
 assert.equal(isProjectNote("Un livre/BOOKBINDER.MD"), true);
+for (const name of ["bookbinder-Été.md", "Un livre/BOOKBINDER-A.MD", "Dossier\\bookbinder-A.md"]) assert.equal(isProjectNote(name), true);
+for (const name of ["bookbinder-.md", "bookbinder-A.md.bak", "bookbinder-Dossier/chapitre.md"]) assert.equal(isProjectNote(name), false);
+assert.equal(excluded("partie/bookbinder-Chapitre.md", { ...defaults.fusion, excludeCharacters: "", excludeNames: "" }), true);
 assert.equal(isProjectNote("Un livre/bookbinder.md.bak"), false);
 assert.equal(excluded("partie/bookbinder.md", { ...defaults.fusion, excludeCharacters: "", excludeNames: "" }), true);
 assert.equal(isProjectNote("Un livre/BOOK-PRINT.MD"), false);

@@ -13,16 +13,17 @@ import { bindFilenameInput } from "./filename.ts";
 import type { FontType } from "./font-catalog.ts";
 import { pdfBaseCss } from "./pdf-presentation.ts";
 import { mountNotesPosition, mountPaperFormat, mountTableOfContents, mountTitlePage } from "./page-layout.ts";
+import { projectNoteName } from "./project-view.ts";
 
 function record(value: unknown): Record<string, unknown> {
 	return value && typeof value === "object" && !Array.isArray(value) ? { ...value as Record<string, unknown> } : {};
 }
 
-export async function openProjectEditor(app: App, directory: string, baseCss: string, fontDirectory: string, defaults?: () => Promise<Record<string, unknown>>): Promise<void> {
-	const original = await readProjectFile(directory);
+export async function openProjectEditor(app: App, directory: string, baseCss: string, fontDirectory: string, defaults?: () => Promise<Record<string, unknown>>, filename?: string): Promise<void> {
+	const original = await readProjectFile(directory, filename);
 	const data: unknown = original === undefined ? await defaults?.() ?? {} : parseYaml(original.yaml);
 	const project = parseProject(data, path.basename(directory));
-	new ProjectModal(app, directory, baseCss, original, record(data), project, fontDirectory).open();
+	new ProjectModal(app, directory, baseCss, original, record(data), project, fontDirectory, original?.name ?? filename ?? projectNoteName(path.basename(directory))).open();
 }
 
 class ProjectModal extends Modal {
@@ -49,7 +50,7 @@ class ProjectModal extends Modal {
 	private refreshFilename: () => void = () => {};
 
 	constructor(app: App, private directory: string, private baseCss: string, private original: ProjectFile | undefined,
-		private data: Record<string, unknown>, private project: BookProject, private fontDirectory: string) {
+		private data: Record<string, unknown>, private project: BookProject, private fontDirectory: string, private filename: string) {
 		super(app);
 		this.projects = {
 			pdf: parseProject(data, path.basename(directory), "pdf"),
@@ -317,9 +318,9 @@ class ProjectModal extends Modal {
 		const controls = this.contentEl.querySelectorAll<HTMLButtonElement | HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("button,input,textarea,select");
 		for (const control of controls) control.disabled = true;
 		try {
-			await saveProjectFile(this.directory, projectYaml(data, stringifyYaml), this.original);
+			await saveProjectFile(this.directory, projectYaml(data, stringifyYaml), this.original, undefined, this.filename);
 			this.dirty = false;
-			new Notice(t("projectSavedFilename", { filename: path.join(this.directory, "bookbinder.md") }));
+			new Notice(t("projectSavedFilename", { filename: path.join(this.directory, this.filename) }));
 		} finally {
 			this.saving = false;
 			this.saveButton?.setButtonText(t("saveProject"));

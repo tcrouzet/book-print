@@ -28,6 +28,8 @@ EPUB and DOCX export need **Pandoc 3.1.1 or later**, without Python or LaTeX. PD
 
 Right-click a Markdown file or a folder in the vault's file explorer and choose **Book to ePub**, **Book to PDF** or **Book to Docx**.
 
+The vault root cannot be exported. A Markdown note at the root can be exported individually.
+
 For the active Markdown note, the same **Book to PDF**, **Book to Docx** and **Book to ePub** commands are available in Obsidian’s command palette. They work independently of other export plugins.
 
 - A file becomes a book on its own.
@@ -51,15 +53,15 @@ EPUB and DOCX files appear in the vault's explorer with your theme's accent colo
 
 Open **Settings → Bookbinder → Create/open project** and choose your manuscript folder.
 
-Set the title, author, language and other book details, then save. The same button opens an existing project. **Book to** automatically creates a missing `bookbinder.md` beside the source file or inside the selected folder, using its name as the title. The **Base** model is included in the plugin, compiled from `models/base.md`, and selected by default. No download is required. Settings also let you download additional models from GitHub and choose one for new projects. Existing projects keep their settings. The default book language is French; choose another language in the project settings.
+Set the title, author, language and other book details, then save. The same button opens an existing folder project. **Book to** automatically creates a missing `bookbinder-<source name>.md` beside the source note or inside the selected folder, using its name as the title. For example, `Chapter.md` gets `bookbinder-Chapter.md`; the `Manuscript` folder gets `Manuscript/bookbinder-Manuscript.md`. Each note has its own settings, even when other notes share its folder. The **Base** model is included in the plugin, compiled from `models/base.md`, and selected by default. No download is required. Settings also let you download additional models from GitHub and choose one for new projects. Existing projects keep their settings. The default book language is French; choose another language in the project settings.
 
 **General → File name** sets the export name without an extension. Leave it empty to derive a lowercase slug from the first author’s last name and the title: Thierry Crouzet and *L’expérience humaine* produce `crouzet-experience-humaine.epub`. Spaces, accents and punctuation are normalised. The automatic suggestion follows title and author edits; a custom name remains fixed until you clear it.
 
-Each project lives in a **`bookbinder.md`** note beside the manuscript. It contains editable YAML properties and a link that opens the visual editor. You can keep your own notes below the properties. The project note is highlighted in the explorer and excluded from the exported book, including when it sits in a subfolder.
+Each project lives in a **`bookbinder-<source name>.md`** note. It contains editable YAML properties and a link that opens the visual editor for that exact project. You can keep your own notes below the properties. All project notes are highlighted in the explorer and excluded from exported books, including when they sit in a subfolder. Existing `bookbinder.md` files remain supported for folder exports and keep their names when edited; individual note exports use their own named projects.
 
 Project settings and images can travel with the manuscript folder. Imported fonts live in Bookbinder’s shared library. Bookbinder preserves additional properties and your project notes when saving, and stops if the project file has been changed elsewhere while the editor is open.
 
-To reuse a project's settings, choose **Settings → Bookbinder → Clone a project**, select its project file, then choose a destination folder. Bookbinder saves a new `bookbinder.md` and opens its editor. It preserves your project notes and leaves the source unchanged. The clone reuses library fonts and keeps image and CSS references; chapters are not copied. A folder that already contains a project cannot be used as the destination.
+To reuse a project's settings, choose **Settings → Bookbinder → Clone a project**, select its project file, then choose a destination folder. Bookbinder saves `bookbinder-<destination folder name>.md` and opens its editor. It preserves your project notes and leaves the source unchanged. The clone reuses library fonts and keeps image and CSS references; chapters are not copied. An existing folder project at the destination is preserved and prevents cloning over it.
 
 ## Shape the typography
 

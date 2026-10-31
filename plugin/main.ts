@@ -13,7 +13,7 @@ import { renderCover } from "./cover";
 import { compareVersions, detectTool } from "./tools";
 import { EPUB_VIEW, DOCX_VIEW, BookFileView } from "./book-file-view";
 import { projectYaml, readProjectFile, saveProjectFile } from "./project-files";
-import { linkProjectNote } from "./project-view";
+import { highlightProjectNotes, linkProjectNote, projectNoteName } from "./project-view";
 import { openProjectEditor } from "./project-modal";
 import { confirmOverwrite } from "./dialogs";
 import { loadTranslationFiles } from "./locale-files.ts";
@@ -67,10 +67,11 @@ export default class BookbinderPlugin extends Plugin {
 				if (!(file instanceof TFile) || !isProjectNote(file.path) || !file.parent) throw new Error(t("openBookbinderMdToEditTheProject"));
 				const adapter = this.app.vault.adapter;
 				if (!(adapter instanceof FileSystemAdapter)) throw new Error(t("projectsRequireObsidianOnDesktop"));
-				await openProjectEditor(this.app, adapter.getFullPath(file.parent.path), resources["epub/base.css"], this.fontDirectory);
+				await openProjectEditor(this.app, adapter.getFullPath(file.parent.path), resources["epub/base.css"], this.fontDirectory, undefined, file.name);
 			} catch (error) { new Notice(error instanceof Error ? error.message : String(error)); }
 		});
 		this.registerMarkdownPostProcessor((element, context) => linkProjectNote(element, context.sourcePath, this.app.vault.getName()));
+		this.register(highlightProjectNotes(this.app.workspace.containerEl));
 		for (const format of ["pdf", "docx", "epub"] as const) this.addCommand({
 			id: `book-to-${format}`,
 			name: format === "pdf" ? "Book to PDF" : format === "docx" ? "Book to Docx" : "Book to ePub",
@@ -83,6 +84,7 @@ export default class BookbinderPlugin extends Plugin {
 		});
 		this.registerEvent(this.app.workspace.on("file-menu", (menu, file) => {
 			if (!(file instanceof TFolder) && !(file instanceof TFile && file.extension.toLowerCase() === "md")) return;
+			if (file instanceof TFolder && file.isRoot()) return;
 			if (file instanceof TFile && isProjectNote(file.path)) return;
 			for (const format of ["pdf", "docx", "epub"] as const) menu.addItem(item => item.setTitle(format === "pdf" ? "Book to PDF" : format === "docx" ? "Book to Docx" : "Book to ePub").setIcon("book-open").onClick(() => {
 				void this.generateBook(file, format);
@@ -91,6 +93,9 @@ export default class BookbinderPlugin extends Plugin {
 	}
 
 	async generateBook(source: TFile | TFolder, format: "epub" | "pdf" | "docx"): Promise<void> {
+		if (!(source instanceof TFile) && !(source instanceof TFolder)) return;
+		if (source instanceof TFolder && source.isRoot()) return;
+		if (source instanceof TFile && (source.extension.toLowerCase() !== "md" || isProjectNote(source.path))) return;
 		if (this.exporting) { new Notice(t("aBookbinderExportIsAlreadyRunning")); return; }
 		this.exporting = true;
 		const notice = new Notice(t(format === "pdf" ? "preparingPdf" : format === "docx" ? "preparingDocx" : "preparingEpub"), 0);
@@ -102,13 +107,14 @@ export default class BookbinderPlugin extends Plugin {
 			const folder = source instanceof TFolder ? source : source.parent;
 			if (!folder) throw new Error(t("theManuscriptFolderCouldNotBeFound"));
 			const directory = adapter.getFullPath(folder.path);
-			const name = source instanceof TFile ? source.basename : source.isRoot() ? this.app.vault.getName() : source.name;
-			const projectFile = await readProjectFile(directory);
+			const name = source instanceof TFile ? source.basename : source.name;
+			const filename = source instanceof TFile ? projectNoteName(name) : undefined;
+			const projectFile = await readProjectFile(directory, filename);
 			let config: unknown;
 			try { config = projectFile === undefined ? await this.defaultProjectData() : parseYaml(projectFile.yaml); }
 			catch (error) { throw new Error(t("invalidFileError", { file: projectFile?.name ?? (this.settings.projectModel || "bookbinder.md"), error: error instanceof Error ? error.message : String(error) })); }
 			const project = parseProject(config, name, format);
-			if (projectFile === undefined) await saveProjectFile(directory, projectYaml({ ...config as Record<string, unknown>, title: project.metadata.title }, stringifyYaml), undefined);
+			if (projectFile === undefined) await saveProjectFile(directory, projectYaml({ ...config as Record<string, unknown>, title: project.metadata.title }, stringifyYaml), undefined, undefined, filename);
 			const files: TFile[] = [];
 			const collect = (entry: TFile | TFolder): void => {
 				if (entry !== source && excluded(folder.isRoot() ? entry.path : entry.path.slice(folder.path.length + 1), project.fusion)) return;

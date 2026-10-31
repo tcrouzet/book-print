@@ -32,7 +32,8 @@ const registration = onload.body.statements.find(node => ts.isForOfStatement(nod
 const commandRegistration = onload.body.statements.find(node => ts.isForOfStatement(node) && node.statement.getText(source).includes("this.addCommand("));
 assert.ok(commandRegistration, "Exports are available in the command palette independently of other plugins");
 const registerCommands = new Function("TFile", "isProjectNote", ts.transpileModule(commandRegistration.getText(source), { compilerOptions: { target: ts.ScriptTarget.ES2021 } }).outputText);
-class TFile { constructor(name, extension = "md") { this.path = name; this.extension = extension; } }
+class TFile { constructor(name, extension = "md") { this.path = name; this.name = path.basename(name); this.parent = { path: path.dirname(name) }; this.extension = extension; } }
+class TFolder { constructor(root = false) { this.root = root; } isRoot() { return this.root; } }
 const commands = new Map(), foreign = { id: "export-to-docx" }, calls = [];
 commands.set("docx-exporter:export-to-docx", foreign);
 let active = new TFile("Book/chapter.md");
@@ -45,10 +46,28 @@ for (const format of ["pdf", "docx", "epub"]) {
 	assert.equal(calls.length, 0, "Checking command availability does not start an export");
 	assert.equal(command.checkCallback(false), true);
 	assert.deepEqual(calls.pop(), { file: active, format }, "The active note exports without DOCX Exporter enabled");
-	for (const invalid of [undefined, new TFile("Book/bookbinder.md"), new TFile("Book/book.docx", "docx")]) {
+	for (const invalid of [undefined, new TFile("Book/bookbinder.md"), new TFile("Book/bookbinder-Chapter.md"), new TFile("Book/book.docx", "docx")]) {
 		const previous = active; active = invalid; assert.equal(command.checkCallback(true), false); active = previous;
 	}
 }
+const menuRegistration = onload.body.statements.find(node => node.getText(source).includes('this.app.workspace.on("file-menu"'));
+assert.ok(menuRegistration);
+const registerMenu = new Function("TFile", "TFolder", "isProjectNote", ts.transpileModule(menuRegistration.getText(source), { compilerOptions: { target: ts.ScriptTarget.ES2021 } }).outputText);
+let fileMenu;
+registerMenu.call({ registerEvent() {}, app: { workspace: { on(_event, callback) { fileMenu = callback; } } }, generateBook() {} }, TFile, TFolder, isProjectNote);
+for (const [target, expected] of [[new TFolder(true), 0], [new TFolder(), 3], [new TFile("chapter.md"), 3], [new TFile("bookbinder-chapter.md"), 0], [new TFile("book.epub", "epub"), 0], [undefined, 0]]) {
+	const items = []; fileMenu({ addItem(callback) { const item = { setTitle() { return this; }, setIcon() { return this; }, onClick() { return this; } }; items.push(item); callback(item); } }, target);
+	assert.equal(items.length, expected, "Only a manuscript note or non-root folder offers Book to");
+}
+const protocolRegistration = onload.body.statements.find(node => node.getText(source).startsWith("this.registerObsidianProtocolHandler("));
+const registerProtocol = new Function("TFile", "FileSystemAdapter", "isProjectNote", "openProjectEditor", "resources", "Notice", "t", ts.transpileModule(protocolRegistration.getText(source), { compilerOptions: { target: ts.ScriptTarget.ES2021 } }).outputText);
+const firstProject = new TFile("Book/bookbinder-First.md"), secondProject = new TFile("Book/bookbinder-Second.md"), openedProjects = [], protocolErrors = [];
+let protocol;
+registerProtocol.call({ registerObsidianProtocolHandler(_id, callback) { protocol = callback; }, fontDirectory: "/fonts", app: { workspace: { getActiveFile: () => firstProject }, vault: { adapter: new FileSystemAdapter(), getAbstractFileByPath(filename) { return filename === secondProject.path ? secondProject : undefined; } } } }, TFile, FileSystemAdapter, isProjectNote, async (...args) => openedProjects.push(args), { "epub/base.css": "" }, class Notice { constructor(message) { protocolErrors.push(message); } }, t);
+await protocol({ file: secondProject.path });
+await protocol({});
+assert.deepEqual(protocolErrors, []);
+assert.deepEqual(openedProjects.map(args => [args[1], args[5]]), [["/vault/Book", secondProject.name], ["/vault/Book", firstProject.name]], "Both rendered and active-note links open the exact project rather than the shared folder project");
 assert.ok(registration, "The plugin registers its exported file formats on load");
 const register = new Function("BookFileView", "EPUB_VIEW", "DOCX_VIEW", "t", "console", ts.transpileModule(registration.getText(source), { compilerOptions: { target: ts.ScriptTarget.ES2021 } }).outputText);
 for (const occupied of [false, true]) {

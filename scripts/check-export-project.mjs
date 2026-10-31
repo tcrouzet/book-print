@@ -12,6 +12,7 @@ import { compareVersions } from "../plugin/tools.ts";
 import { fontCatalog } from "../plugin/font-catalog.ts";
 import { installFontPackage, needsFontPackage, readFontPackage } from "../plugin/font-package.ts";
 import { fontFamily } from "../plugin/presentation.ts";
+import { projectNoteName } from "../plugin/project-view.ts";
 
 setLocale("en");
 const root = await mkdtemp(path.join(tmpdir(), "bookbinder-auto-project-"));
@@ -32,7 +33,7 @@ class TFolder {
 	isRoot() { return false; }
 }
 class TFile {
-	constructor(name, parent) { this.path = parent.path + "/" + name; this.basename = path.basename(name, ".md"); this.extension = "md"; this.parent = parent; parent.children.push(this); }
+	constructor(name, parent) { this.path = parent.path ? parent.path + "/" + name : name; this.basename = path.basename(name, ".md"); this.extension = "md"; this.parent = parent; parent.children.push(this); }
 }
 class FileSystemAdapter {
 	getFullPath(relative) { return path.join(root, relative); }
@@ -44,11 +45,20 @@ class Notice {
 	setMessage(message) { notices.push(message); }
 	hide() {}
 }
-const generateBook = new Function("FileSystemAdapter", "TFolder", "TFile", "Notice", "t", "path", "readProjectFile", "parseYaml", "parseProject", "projectYaml", "stringifyYaml", "saveProjectFile", "excluded", "isProjectNote", "detectTool", "compareVersions", "resources", "renderCover", "confirmOverwrite", "needsFontPackage", "exportPdf", "exportDocx", "exportEpub", method("generateBook") + "return generateBook;")(
+const generateBook = new Function("FileSystemAdapter", "TFolder", "TFile", "Notice", "t", "path", "readProjectFile", "parseYaml", "parseProject", "projectYaml", "stringifyYaml", "saveProjectFile", "excluded", "isProjectNote", "detectTool", "compareVersions", "resources", "renderCover", "confirmOverwrite", "needsFontPackage", "exportPdf", "exportDocx", "exportEpub", "projectNoteName", method("generateBook") + "return generateBook;")(
 	FileSystemAdapter, TFolder, TFile, Notice, t, path, readProjectFile, JSON.parse, parseProject, projectYaml, JSON.stringify, saveProjectFile, excluded, isProjectNote,
 	async tool => ({ state: "found", version: "3.9", path: tool }), compareVersions, {}, () => {}, () => {}, needsFontPackage,
 	...(["pdf", "docx", "epub"].map(format => async request => { assert.equal(await needsFontPackage(request.project, request.fontDirectory), false, "Required fonts are installed before export"); exports.push({ format, request }); return request.output; })),
+	projectNoteName,
 );
+for (const format of ["pdf", "docx", "epub"]) {
+	const vaultRoot = new TFolder(""); vaultRoot.isRoot = () => true;
+	let reads = 0;
+	const context = { settings: { ...DEFAULT_SETTINGS }, async defaultProjectData() { reads++; throw Error("The vault root must be rejected before reading a project"); }, app: { vault: { adapter: new FileSystemAdapter(), getName: () => "Vault" } } };
+	await generateBook.call(context, vaultRoot, format);
+	assert.equal(reads, 0, "The vault root cannot create a project or start exporting");
+	assert.equal(exports.length, 0);
+}
 for (const format of ["pdf", "docx", "epub"]) for (const kind of ["file", "folder"]) {
 	const folder = new TFolder(format + "-" + kind), file = new TFile("Chapter.md", folder);
 	const directory = path.join(root, folder.path); await mkdir(directory);
@@ -72,20 +82,60 @@ for (const format of ["pdf", "docx", "epub"]) for (const kind of ["file", "folde
 	assert.equal(generated.format, format);
 	assert.equal(generated.request.sources.length, 1);
 	assert.equal(generated.request.sources[0].content, "# Heading\n\nManuscript.\n");
-	let saved = await readProjectFile(directory);
-	assert.ok(saved, "Book to creates bookbinder.md before exporting " + format);
+	const filename = projectNoteName(kind === "folder" ? folder.name : file.basename);
+	let saved = await readProjectFile(directory, filename);
+	assert.ok(saved, "Book to creates a project named after the source before exporting " + format);
+	assert.equal(saved.name, filename);
 	const data = JSON.parse(saved.yaml);
 	assert.equal(data.title, kind === "folder" ? folder.name : file.basename);
 	for (const section of ["pdf", "docx", "epub"]) assert.deepEqual(data[section], model[section], "All format settings remain editable in the project");
 	assert.match(saved.body, /obsidian:\/\/bookbinder/);
 	await saveProjectFile(directory, projectYaml({ ...data, title: "My edited book", author: "My author" }, JSON.stringify), saved);
-	saved = await readProjectFile(directory);
-	new TFile("bookbinder.md", folder);
+	saved = await readProjectFile(directory, filename);
+	new TFile(filename, folder);
 	context.settings.projectModel = "missing.md";
 	await generateBook.call(context, input, format);
 	assert.equal(exports.length, 1, notices.join("\n"));
 	assert.equal(exports.pop().request.project.metadata.title, "My edited book");
-	assert.deepEqual(await readProjectFile(directory), saved, "An existing project is preserved even if the selected model is missing");
+	assert.deepEqual(await readProjectFile(directory, filename), saved, "An existing project is preserved even if the selected model is missing");
+	context.settings.projectModel = DEFAULT_SETTINGS.projectModel;
+	const otherNote = new TFile("Other note.md", folder);
+	await writeFile(path.join(root, otherNote.path), "OTHER MANUSCRIPT");
+	await generateBook.call(context, otherNote, format);
+	assert.equal(exports.length, 1, notices.join("\n"));
+	const otherExport = exports.pop();
+	assert.equal(otherExport.request.project.metadata.title, "Other note");
+	assert.deepEqual(otherExport.request.sources.map(source => source.content), ["OTHER MANUSCRIPT"]);
+	assert.deepEqual(await readProjectFile(directory, filename), saved, "Creating another note project preserves the original settings");
+	const otherProject = (await readProjectFile(directory, projectNoteName(otherNote.basename)));
+	assert.ok(otherProject);
+	await saveProjectFile(directory, projectYaml({ title: "Legacy folder settings" }, JSON.stringify), undefined, undefined, "bookbinder.md");
+	if (kind === "folder") {
+		await generateBook.call(context, folder, format);
+		const folderExport = exports.pop();
+		assert.equal(folderExport.request.project.metadata.title, "My edited book", "The named folder project takes priority over legacy settings");
+		assert.equal(folderExport.request.sources.length, 2, "Project notes are excluded from the folder assembly");
+	}
 }
+for (const format of ["pdf", "docx", "epub"]) {
+	const folder = new TFolder("Legacy-" + format), file = new TFile("Chapter.md", folder);
+	const directory = path.join(root, folder.path); await mkdir(directory);
+	await writeFile(path.join(root, file.path), "LEGACY MANUSCRIPT");
+	await writeFile(path.join(directory, "bookbinder.md"), '---\n{"title":"Existing folder settings"}\n---\n');
+	new TFile("bookbinder.md", folder);
+	const context = { settings: { ...DEFAULT_SETTINGS, projectModel: "missing.md" }, defaultProjectData, installFonts, fontDirectory: path.join(root, "library-pdf"), app: { vault: { adapter: new FileSystemAdapter(), async read(file) { return await readFile(path.join(root, file.path), "utf8"); } } } };
+	await generateBook.call(context, folder, format);
+	assert.equal(exports.length, 1, notices.join("\n"));
+	assert.equal(exports.pop().request.project.metadata.title, "Existing folder settings", "A legacy folder project remains usable in each format");
+	assert.equal(await readProjectFile(directory, projectNoteName(folder.name)), undefined, "A legacy folder project is not duplicated");
+}
+const vaultRoot = new TFolder(""); vaultRoot.isRoot = () => true;
+const rootNote = new TFile("Root chapter.md", vaultRoot);
+await writeFile(path.join(root, rootNote.path), "ROOT NOTE");
+const rootContext = { settings: { ...DEFAULT_SETTINGS }, defaultProjectData, installFonts, fontDirectory: path.join(root, "library-pdf"), app: { vault: { adapter: new FileSystemAdapter(), async read(file) { return await readFile(path.join(root, file.path), "utf8"); } } } };
+await generateBook.call(rootContext, rootNote, "epub");
+assert.equal(exports.length, 1, notices.join("\n"));
+assert.deepEqual(exports.pop().request.sources.map(source => source.content), ["ROOT NOTE"], "A note at the vault root remains exportable");
+assert.ok(await readProjectFile(root, projectNoteName(rootNote.basename)));
 assert.equal(exports.length, 0);
 console.log("Book to: automatic projects, font download before PDF/Docx/ePub, installed font reuse, download failure and retry; existing projects and manuscript preserved: OK.");

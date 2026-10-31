@@ -6,6 +6,7 @@ import { loadFont, projectYaml, readProjectFile, saveProjectFile } from "../plug
 import { fontFamily, projectCss } from "../plugin/presentation.ts";
 import { parseProject } from "../plugin/project.ts";
 import { cloneProjectFile } from "../plugin/project-clone.ts";
+import { projectNoteName } from "../plugin/project-view.ts";
 import { setLocale } from "../plugin/i18n.ts";
 import { listFontLibrary, readFontLibrary, resolveFont, saveLibraryFont } from "../plugin/font-library.ts";
 import "./check-font-package.ts";
@@ -65,7 +66,7 @@ const data = { title: "Un projet", epub: { fonts: [reference], toc: true, "toc-d
 const initial = JSON.stringify(data);
 await saveProjectFile(directory, initial, undefined);
 let saved = (await readProjectFile(directory))!;
-assert.equal(saved.name, "bookbinder.md");
+assert.equal(saved.name, "bookbinder-project.md");
 assert.equal(saved.yaml.trimEnd(), initial);
 assert.match(saved.content, /^---\n/);
 assert.match(saved.body, /\[Modifier le projet\]\(obsidian:\/\/bookbinder\)/);
@@ -88,21 +89,21 @@ saved = (await readProjectFile(directory))!;
 assert.equal(JSON.parse(saved.yaml).custom.preserved, true);
 assert.equal(JSON.parse(saved.yaml).title, "Titre modifié");
 const body = saved.body + "\n## Notes personnelles\n\nCe texte reste modifiable.\n---\n";
-await writeFile(path.join(directory, "bookbinder.md"), `\uFEFF---\r\n${updated}\r\n---\r\n${body}`);
+await writeFile(path.join(directory, saved.name), `\uFEFF---\r\n${updated}\r\n---\r\n${body}`);
 const handwritten = (await readProjectFile(directory))!;
 assert.equal(handwritten.body, body);
 await assert.rejects(saveProjectFile(directory, initial, saved), /modifié/);
 await saveProjectFile(directory, initial, handwritten);
 assert.equal((await readProjectFile(directory))!.body, body);
 const beforeBodyEdit = (await readProjectFile(directory))!;
-await writeFile(path.join(directory, "bookbinder.md"), beforeBodyEdit.content + "Autre modification\n");
+await writeFile(path.join(directory, beforeBodyEdit.name), beforeBodyEdit.content + "Autre modification\n");
 await assert.rejects(saveProjectFile(directory, updated, beforeBodyEdit), /modifié/);
 const unsupported = path.join(directory, "unsupported"); await mkdir(unsupported);
 for (const name of ["book-print.md", "book-print.yml"]) {
  await writeFile(path.join(unsupported, name), initial);
  await assert.rejects(cloneProjectFile(path.join(unsupported, name), path.join(directory, "unused-clone"), JSON.parse, JSON.stringify), /bookbinder\.md/);
 }
-assert.equal(await readProjectFile(unsupported), undefined, "Only bookbinder.md is a project file");
+assert.equal(await readProjectFile(unsupported), undefined, "Other Markdown and YAML files are not projects");
 await saveProjectFile(unsupported, updated, undefined);
 const currentProject = await readProjectFile(unsupported);
 assert.ok(currentProject);
@@ -163,7 +164,7 @@ assert.equal(cloned.body, cloneBody);
 assert.deepEqual(clonedData, { ...cloneData, cover: path.join(cloneSource, "images/cover.jpg"), "cover-background": path.join(directory, "background.jpg"),
 	epub: { ...cloneData.epub, css: [path.join(cloneSource, "css/base.css")] },
 	pdf: { ...cloneData.pdf, fonts: [path.join(cloneSource, "fonts/pdf.ttf")] }, docx: { css: path.join(cloneSource, "docx.css") } });
-assert.deepEqual(await readdir(cloneTarget), ["bookbinder.md"]);
+assert.deepEqual(await readdir(cloneTarget), ["bookbinder-clone-target.md"]);
 assert.equal(await readFile(cloneFilename, "utf8"), cloneContent);
 await assert.rejects(cloneProjectFile(cloneFilename, cloneTarget, JSON.parse, JSON.stringify), /contient déjà/);
 await assert.rejects(cloneProjectFile(cloneFilename, cloneSource, JSON.parse, JSON.stringify), /contient déjà/);
@@ -173,4 +174,29 @@ const failedClone = path.join(directory, "failed-clone"); await mkdir(failedClon
 await writeFile(cloneFilename, "---\nnot valid JSON\n---\n");
 await assert.rejects(cloneProjectFile(cloneFilename, failedClone, JSON.parse, JSON.stringify));
 assert.deepEqual(await readdir(failedClone), []);
+const namedDirectory = path.join(root, "Plusieurs notes"); await mkdir(namedDirectory);
+for (const title of ["Été", "Ete", "Autre note"]) {
+	const filename = projectNoteName(title);
+	await saveProjectFile(namedDirectory, JSON.stringify({ title }), undefined, undefined, filename);
+	const project = (await readProjectFile(namedDirectory, filename))!;
+	assert.equal(project.name, filename); assert.equal(JSON.parse(project.yaml).title, title);
+	await assert.rejects(saveProjectFile(namedDirectory, initial, project, undefined, projectNoteName("Different note")), /modifié/, "An edit cannot be redirected to another note project");
+}
+assert.equal(await readProjectFile(namedDirectory), undefined, "Note projects do not become the folder project");
+const namedSource = path.join(namedDirectory, projectNoteName("Été"));
+const namedClone = path.join(root, "Named clone"); await mkdir(namedClone);
+await cloneProjectFile(namedSource, namedClone, JSON.parse, JSON.stringify);
+assert.equal(JSON.parse((await readProjectFile(namedClone))!.yaml).title, "Été", "Cloning reads the selected note project");
+for (const name of ["../bookbinder-escape.md", "/bookbinder-escape.md", "chapter.md"]) {
+	await assert.rejects(readProjectFile(namedDirectory, name));
+	await assert.rejects(saveProjectFile(namedDirectory, initial, undefined, undefined, name));
+}
+const legacyDirectory = path.join(root, "Legacy"); await mkdir(legacyDirectory);
+await writeFile(path.join(legacyDirectory, "bookbinder.md"), cloneContent);
+const legacyProject = (await readProjectFile(legacyDirectory))!;
+assert.equal(legacyProject.name, "bookbinder.md");
+await saveProjectFile(legacyDirectory, initial, legacyProject);
+assert.deepEqual(await readdir(legacyDirectory), ["bookbinder.md"], "Editing a legacy folder project preserves its name");
+await assert.rejects(saveProjectFile(legacyDirectory, initial, undefined), /modifié/);
+assert.equal(await readProjectFile(legacyDirectory, projectNoteName("Chapter")), undefined, "A note does not inherit the legacy folder project");
 console.log("Projets Markdown : propriétés éditables, lien, texte conservé, conflits, format courant et polices : OK.");

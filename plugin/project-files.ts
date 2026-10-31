@@ -5,10 +5,11 @@ import { copyFile, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/prom
 import * as path from "node:path";
 import { detectFontFace } from "./font-metadata.ts";
 import type { FontFaceInfo } from "./presentation.ts";
+import { isProjectNote, projectNoteName } from "./project-view.ts";
 
 export interface ImportedFont { name: string; data: Uint8Array; face?: FontFaceInfo }
 export interface ProjectFile {
-	name: "bookbinder.md";
+	name: string;
 	content: string;
 	yaml: string;
 	body: string;
@@ -38,11 +39,14 @@ export function projectYaml(data: Record<string, unknown>, stringifyYaml: (data:
 	return stringifyYaml(protect(ordered)).replace(new RegExp('["\x27]?' + prefix + '(\\d+)["\x27]?', "g"), (_match, index: string) => strings[Number(index)]);
 }
 
-export async function readProjectFile(directory: string): Promise<ProjectFile | undefined> {
-	let content: string;
-	try { content = await readFile(path.join(directory, "bookbinder.md"), "utf8"); }
-	catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined; throw error; }
-	return { name: "bookbinder.md", content, ...projectFrontmatter(content, "bookbinder.md") };
+export async function readProjectFile(directory: string, filename?: string): Promise<ProjectFile | undefined> {
+	for (const name of filename === undefined ? [projectNoteName(path.basename(directory)), "bookbinder.md"] : [filename]) {
+		if (path.basename(name) !== name || !isProjectNote(name)) throw new Error(t("chooseABookbinderMdFile"));
+		let content: string;
+		try { content = await readFile(path.join(directory, name), "utf8"); }
+		catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") continue; throw error; }
+		return { name, content, ...projectFrontmatter(content, name) };
+	}
 }
 
 export function projectFrontmatter(content: string, filename: string): { yaml: string; body: string } {
@@ -65,20 +69,22 @@ export async function loadFont(filename: string): Promise<ImportedFont> {
 	return { name, data, face: detectFontFace(data) };
 }
 
-export async function saveProjectFile(directory: string, yaml: string, expected: ProjectFile | undefined, body?: string): Promise<void> {
+export async function saveProjectFile(directory: string, yaml: string, expected: ProjectFile | undefined, body?: string, filename?: string): Promise<void> {
+	const name = filename ?? expected?.name ?? projectNoteName(path.basename(directory));
+	if (expected && expected.name !== name) throw new Error(t("projectChangedElsewhere"));
 	const checkUnchanged = async () => {
-		const current = await readProjectFile(directory);
+		const current = await readProjectFile(directory, filename ?? expected?.name);
 		if (current?.content !== expected?.content) throw new Error(t("projectChangedElsewhere"));
 	};
 	await checkUnchanged();
 	const temporary = await mkdtemp(path.join(directory, ".bookbinder-project-"));
 	try {
 		await checkUnchanged();
-		const staged = path.join(temporary, "bookbinder.md");
+		const staged = path.join(temporary, name);
 		body ??= expected?.body ?? t("projectEditlink");
 		await writeFile(staged, `---\n${yaml.trimEnd()}\n---\n${body}`);
-		if (!expected) await copyFile(staged, path.join(directory, "bookbinder.md"), constants.COPYFILE_EXCL);
-		else await rename(staged, path.join(directory, "bookbinder.md"));
+		if (!expected) await copyFile(staged, path.join(directory, name), constants.COPYFILE_EXCL);
+		else await rename(staged, path.join(directory, name));
 	} finally {
 		await rm(temporary, { recursive: true, force: true });
 	}

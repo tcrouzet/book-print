@@ -3,12 +3,13 @@ import * as path from "node:path";
 import { localResource, parseProject } from "./project.ts";
 import { projectYaml, readProjectFile, saveProjectFile } from "./project-files.ts";
 import { libraryFontPrefix } from "./presentation.ts";
+import { isProjectNote } from "./project-view.ts";
 
 export async function cloneProjectFile(filename: string, destination: string, parseYaml: (yaml: string) => unknown, stringifyYaml: (data: unknown) => string): Promise<void> {
 	const name = path.basename(filename);
-	if (name !== "bookbinder.md") throw new Error(t("chooseABookbinderMdFile"));
+	if (!isProjectNote(name)) throw new Error(t("chooseABookbinderMdFile"));
 	const directory = path.dirname(filename);
-	const source = await readProjectFile(directory);
+	const source = await readProjectFile(directory, name);
 	if (!source) throw new Error(t("theSelectedProjectCouldNotBeFound"));
 	if (await readProjectFile(destination)) throw new Error(t("thisFolderAlreadyContainsAProjectChooseAnotherFolder"));
 	const parsed = parseYaml(source.yaml);

@@ -198,6 +198,8 @@
 .nav-files-container .nav-file-title[data-path$=".epub" i] .nav-file-title-content,
 .nav-files-container .nav-file-title[data-path$=".docx" i],
 .nav-files-container .nav-file-title[data-path$=".docx" i] .nav-file-title-content,
+.nav-files-container .nav-file-title.bookbinder-project-file,
+.nav-files-container .nav-file-title.bookbinder-project-file .nav-file-title-content,
 .nav-files-container .nav-file-title[data-path="bookbinder.md" i],
 .nav-files-container .nav-file-title[data-path$="/bookbinder.md" i],
 .nav-files-container .nav-file-title[data-path="bookbinder.md" i] .nav-file-title-content,

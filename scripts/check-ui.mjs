@@ -44,7 +44,7 @@ setCoreLocale("fr");
 const fontPath = process.env.BOOKBINDER_TEST_FONT || "/System/Library/Fonts/Supplemental/Times New Roman.ttf";
 const font = await loadFont(fontPath);
 const browser = await build({
-	stdin: { contents: 'export * from "./plugin/i18n.ts"; export * from "./plugin/filename.ts"; export * from "./plugin/font-catalog.ts"; export { StyleEditor } from "./plugin/style-editor.ts"; export * from "./plugin/page-layout.ts"; export { pdfBaseCss } from "./plugin/pdf-presentation.ts"; export { mountProjectTabs } from "./plugin/project-tabs.ts"; export { renderCover } from "./plugin/cover.ts"; export * from "./plugin/presentation.ts"; export { linkProjectNote } from "./plugin/project-view.ts";', resolveDir: root },
+	stdin: { contents: 'export * from "./plugin/i18n.ts"; export * from "./plugin/filename.ts"; export * from "./plugin/font-catalog.ts"; export { StyleEditor } from "./plugin/style-editor.ts"; export * from "./plugin/page-layout.ts"; export { pdfBaseCss } from "./plugin/pdf-presentation.ts"; export { mountProjectTabs } from "./plugin/project-tabs.ts"; export { renderCover } from "./plugin/cover.ts"; export * from "./plugin/presentation.ts"; export * from "./plugin/project-view.ts";', resolveDir: root },
 	bundle: true, format: "iife", globalName: "BookUI", write: false,
 });
 const styles = await readFile(path.join(root, "styles.css"), "utf8");
@@ -108,10 +108,10 @@ const check = async assets => {
 	filenameInput.value = "Épreuve finale"; filenameInput.dispatchEvent(new Event("input")); filenameInput.dispatchEvent(new Event("blur")); filenameInput.remove();
 	const note = document.createElement("div");
 	note.innerHTML = '<a href="obsidian://bookbinder">Modifier le projet</a><a href="https://example.org">Autre lien</a>';
-	BookUI.linkProjectNote(note, "Livres/L’été & nous/bookbinder.md", "Mon coffre");
+	BookUI.linkProjectNote(note, "Livres/L’été & nous/bookbinder-L’été.md", "Mon coffre");
 	const projectLink = new URL(note.querySelector("a").href);
 	assert(projectLink.protocol === "obsidian:" && projectLink.hostname === "bookbinder", "Lien d’ouverture du projet");
-	assert(projectLink.searchParams.get("file") === "Livres/L’été & nous/bookbinder.md" && projectLink.searchParams.get("vault") === "Mon coffre", "Chemin et coffre du projet rendu");
+	assert(projectLink.searchParams.get("file") === "Livres/L’été & nous/bookbinder-L’été.md" && projectLink.searchParams.get("vault") === "Mon coffre", "Chemin et coffre du projet nommé rendu");
 	assert(note.querySelectorAll("a")[1].getAttribute("href") === "https://example.org", "Autres liens préservés");
 	const unsupportedNote = document.createElement("div"); unsupportedNote.innerHTML = '<a href="obsidian://book-print">Modifier</a>';
 	BookUI.linkProjectNote(unsupportedNote, "Livres/bookbinder.md", "Mon coffre");
@@ -122,6 +122,7 @@ const check = async assets => {
 	const explorer = document.createElement("div"); explorer.className = "nav-files-container";
 	explorer.innerHTML = '<div class="nav-file-title" data-path="Livres/bookbinder.md"><span class="nav-file-title-content">bookbinder.md</span></div>';
 	document.body.append(explorer);
+	const stopHighlighting = BookUI.highlightProjectNotes(explorer);
 	const style = document.createElement("style");
 	style.textContent = assets.styles + "body{font:16px/1.5 sans-serif;margin:24px}h1{font-size:24px}.bookbinder-project-presentation{max-width:1000px}";
 	document.head.append(style);
@@ -140,12 +141,20 @@ const check = async assets => {
 	for (const [name, value] of Object.entries(tokens)) document.documentElement.style.setProperty(name, value);
 	document.documentElement.style.setProperty("--text-error", "#b00020");
 	assert(getComputedStyle(explorer.querySelector("span")).color === "rgb(109, 40, 217)", "Projet Markdown dans la couleur d’accentuation");
-	for (const name of ["livre.epub", "livre.docx", "LIVRE.DOCX"]) {
+	for (const name of ["livre.epub", "livre.docx", "LIVRE.DOCX", "bookbinder-L’été.md", "bookbinder-Autre note.md"]) {
 		explorer.querySelector(".nav-file-title").dataset.path = "Livres/" + name;
+		await new Promise(resolve => window.setTimeout(resolve, 0));
 		assert(getComputedStyle(explorer.querySelector("span")).color === "rgb(109, 40, 217)", "Export visible dans la couleur d’accentuation : " + name);
 	}
-	explorer.querySelector(".nav-file-title").dataset.path = "Livres/book-print.md";
-	assert(getComputedStyle(explorer.querySelector("span")).color !== "rgb(109, 40, 217)", "Only bookbinder.md is highlighted as a project");
+	for (const path of ["Livres/book-print.md", "bookbinder-Dossier/chapitre.md", "Livres/bookbinder-.md"]) {
+		explorer.querySelector(".nav-file-title").dataset.path = path;
+		await new Promise(resolve => window.setTimeout(resolve, 0));
+		assert(getComputedStyle(explorer.querySelector("span")).color !== "rgb(109, 40, 217)", "Only project filenames are highlighted: " + path);
+	}
+	const added = makeEl("div"); added.className = "nav-file-title"; added.dataset.path = "bookbinder-Nouveau.md"; explorer.append(added);
+	await new Promise(resolve => window.setTimeout(resolve, 0));
+	assert(added.classList.contains("bookbinder-project-file"), "New project notes are highlighted without reopening the explorer");
+	stopHighlighting(); assert(!added.classList.contains("bookbinder-project-file"), "Disabling the plugin removes its project classes");
 	explorer.remove();
 	const title = document.createElement("h1"); title.textContent = "Présentation du livre"; document.body.append(title);
 	const host = document.createElement("section"); host.className = "bookbinder-project-modal"; host.style.width = "800px"; host.style.height = "760px"; document.body.append(host);
@@ -989,7 +998,7 @@ const { disabledRules, ...epub } = result.presentation;
 const data = { title: "Projet visuel", author: "Auteur", filename: result.filename, colophon: "COL_UI *Composition personnelle*.", cover: "cover.jpg", epub: { ...epub, "disabled-rules": disabledRules }, pdf: result.pdf, docx: result.docx, custom: { preserved: true } };
 await saveProjectFile(projectDirectory, projectYaml(data, JSON.stringify), undefined);
 const projectFile = await readProjectFile(projectDirectory);
-assert.equal(projectFile.name, "bookbinder.md");
+assert.equal(projectFile.name, "bookbinder-" + path.basename(projectDirectory) + ".md");
 assert.match(projectFile.body, /obsidian:\/\/bookbinder/);
 const saved = JSON.parse(projectFile.yaml);
 assert.deepEqual(Object.keys(saved), ["title", "author", "filename", "colophon", "cover", "custom", "pdf", "docx", "epub"]);
@@ -1056,7 +1065,7 @@ assert.match(css, /body .smallcaps\{letter-spacing:0.05em\}/);
 assert.match(css, /body sub\{font-size:0.75em\}/);
 assert.ok(css.includes("body .bookbinder-after-heading-body + p::first-letter{font-size:2em}"));
 const cloneDirectory = path.join(directory, "clone"); await mkdir(cloneDirectory);
-await cloneProjectFile(path.join(projectDirectory, "bookbinder.md"), cloneDirectory, JSON.parse, JSON.stringify);
+await cloneProjectFile(path.join(projectDirectory, projectFile.name), cloneDirectory, JSON.parse, JSON.stringify);
 const clone = parseProject(JSON.parse((await readProjectFile(cloneDirectory)).yaml), "Clone");
 const cloneOutput = path.join(cloneDirectory, "Clone.epub");
 await exportEpub({ project: clone, sources: [{ path: path.join(cloneDirectory, "source.md"), content: "## Un clone\n\nSon texte." }], directory: cloneDirectory, output: cloneOutput, fontDirectory, pandoc: pandoc.path, resources, renderCover: async () => { throw new Error("Le clone doit réutiliser la couverture existante"); } });
